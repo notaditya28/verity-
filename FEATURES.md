@@ -64,3 +64,19 @@
 - The results page shows what Verity read from the image: alt text, extracted text, description and dominant colours with swatches. Finding cards show colour swatches next to hex codes
 - Failure modes: if image reading fails, palette and alt-text checks still run, and the page offers “Retry AI checks” (which re-reads the image). With no API key, the page says the image text wasn't read
 - `scripts/test-images.ts` runs the pixel pipeline offline on the real sample image. The yellow text measures 1.6–1.7:1 (fail), white on teal 4.8:1 (pass), and the orange is off-palette
+
+### M6 — Evaluation and docs
+- `npm run eval` (`scripts/eval.ts`) writes [EVAL.md](EVAL.md) with measured numbers only:
+  - rule-engine precision and recall on 25 hand-labelled cases (`scripts/eval-cases.ts`), with misses listed as they are
+  - fix effectiveness on the samples
+  - contrast measured from the image vs the true drawing colours
+  - `--ai` adds Gemini judge cases (tone, goal fit, unsupported claims, clean control), validation stats, latency and vision OCR on sample 4
+- `npm test` runs the offline unit checks
+- README with a 60-second walkthrough, a Mermaid flow diagram, architecture, setup, env vars and limitations
+- ROUND3.md: how Fact Drift Alerts, guideline-gap insights and confidential mode build on the current schema
+- DISCLOSURES and CHANGES_FROM_PLAN are final
+
+## Not built (by design)
+- Logo detection (last item on the cut list)
+- Real authentication and multi-org support (the brief asks for a pre-seeded demo org and a role switcher)
+- Replacing the image inside an existing submission (image findings are advice; see CHANGES_FROM_PLAN)

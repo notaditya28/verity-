@@ -32,3 +32,5 @@
 - **Time budget:** image reading (10 s) plus the judge call (18 s when the image was read in the same check) keep a full check under 30 s.
 - **Logo check:** not built (it was last on the cut list). `brand_assets.logo_url` stays in the schema.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
+- **Evaluation set:** the labelled cases in `scripts/eval-cases.ts` are separate from the demo samples, and misses are reported rather than tuned away. The AI part of the eval gives the model every seed rule and fact as context, so it runs without a database.
+- **Eval runner:** `npm run eval` uses `tsx --conditions=react-server` so server-only modules (the Gemini client) can be imported from a script.
