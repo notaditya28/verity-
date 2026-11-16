@@ -68,7 +68,8 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
         {check && (
           <p className="w-full text-xs text-muted-foreground">
             Checked {check.finishedAt ? check.finishedAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "(running)"} · rule checks{" "}
-            {check.status === "failed" ? "failed" : "done"} · AI checks {check.aiStatus}
+            {check.status === "failed" ? "failed" : "done"} · AI checks{" "}
+            {check.aiStatus === "completed" ? `done (${check.model}, prompt ${check.promptVersion})` : check.aiStatus === "failed" ? "pending (retry below)" : check.aiStatus}
             {check.redactions.length > 0 && ` · redacted before AI: ${check.redactions.map((r) => `${r.count} ${r.type}`).join(", ")}`}
           </p>
         )}
@@ -80,6 +81,18 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
           {check?.error ? `The check failed: ${check.error}` : "This version has not been checked yet."}
           {version && <RerunButton versionId={version.id} />}
         </div>
+      )}
+      {check && check.status !== "failed" && check.aiStatus === "failed" && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <AlertTriangle className="h-4 w-4" aria-hidden />
+          <span>AI tone and claim checks didn’t finish{check.error ? ` (${check.error})` : ""}. Rule findings are shown below.</span>
+          {version && <RerunButton versionId={version.id} label="Retry AI checks" />}
+        </div>
+      )}
+      {check && check.aiStatus === "skipped" && (
+        <p role="status" className="rounded-lg border bg-muted p-3 text-sm text-muted-foreground">
+          {check.error ?? "AI checks were skipped."} Only rule-based findings are shown.
+        </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">

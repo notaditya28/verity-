@@ -25,9 +25,10 @@ All code in this repository was written between Mon 16 Nov 2026 10:00 IST and Th
 | postgres | Postgres driver | Unlicense |
 | zod | Validation | MIT |
 | server-only | Keeps server modules out of client bundles | MIT |
+| @google/genai | Gemini API client (server-side only) | Apache-2.0 |
 | dotenv, tsx, typescript, eslint, eslint-config-next | Tooling | MIT / Apache-2.0 |
 
-More libraries (`@google/genai`, `sharp`, `node-vibrant`) will be added in later milestones and listed here.
+More libraries (`sharp`, `node-vibrant`) will be added in later milestones and listed here.
 
 ## Demo data
 "Lumina Skin" and all of its products, prices, facts and sample posts are **fictional**. They do not represent any real company.

@@ -26,5 +26,19 @@
 - `/submissions` list
 - `scripts/try-samples.ts`: offline sanity run of all samples. Applying every fix and re-checking gives 0 findings
 
+### M3 — AI claim and tone checks
+- Retrieval (`lib/checks/retrieve.ts`): for each sentence, Postgres full-text search (`ts_rank`) plus `pg_trgm` `word_similarity` over rules and current facts, top 5 each. AI-judged rules (T-01 voice, M-02 goal/audience/CTA fit) are always in scope. The retriever is behind an interface so pgvector can slot in later
+- One Gemini call per check (`lib/ai/gemini.ts`): model from `GEMINI_MODEL`, temperature 0, structured JSON output with a schema, 22 s timeout
+- The prompt (`lib/prompts/judge.ts`, `PROMPT_VERSION = judge-v1`) has separate delimited blocks for the brief, retrieved rules, retrieved facts, rule findings already caught, and the content. The content block is marked untrusted, and tag-like text inside it is neutralised
+- Validation (`lib/checks/validate-ai.ts`), checked by `scripts/test-validate-ai.ts`:
+  - zod parse
+  - drop findings whose quote isn't an exact substring of the content
+  - a cited code that wasn't retrieved is stripped and the finding becomes `needs_human_verification`
+  - no citation at all also becomes `needs_human_verification`, capped at medium (no source, no hard flag)
+  - confidence below 0.6 becomes `needs_human_verification`
+  - "supported" items and duplicates of rule findings are dropped
+- Failure mode: if Gemini errors or times out, the rule findings are still saved, the check is marked `partial`, and the results page shows "Retry AI checks". With no API key the AI stage is skipped and the page says so
+- Each check row stores `policy_version_id`, `prompt_version` and `model`. The audit log records the provider, model, retrieved codes, validation stats and redaction counts
+
 ## In progress
-- M3 AI claim and tone checks
+- M4 decisions and workflow

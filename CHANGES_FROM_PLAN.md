@@ -17,4 +17,8 @@
 - **Fix format:** `suggested_fix` is machine-applicable. With a span it replaces the quote (empty means delete). With `span_start = span_end` it is inserted at that point. With no span it is advice only. This is what lets "Apply accepted fixes" build the next version without another LLM call.
 - **Numbers beyond prices:** C-03 also checks vitamin C % and SPF against the registry, as the brief says "prices and numbers".
 - **Unmatched prices:** a ₹ amount that matches no fact becomes `needs_human_verification`, not a hard flag (no source, no hard flag).
+- **Which sentences get retrieval:** every sentence (up to 12), not only ones a classifier marks as claims. The content is short, so this is simpler and doesn't miss claims.
+- **AI citation format:** the JSON schema uses `""` for "no code" instead of `null`. Plain strings are the most portable structured-output type across Gemini models.
+- **AI retry:** "Retry AI checks" re-runs the whole check as a new check row (rule checks are fast and deterministic). That keeps every attempt in the history.
+- **AI "supported" findings** are dropped rather than shown, to keep the findings list to actionable issues.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
