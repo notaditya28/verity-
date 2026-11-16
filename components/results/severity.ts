@@ -23,5 +23,5 @@ export function overallStatus(findings: Pick<Finding, "severity">[]): OverallSta
   const max = Math.max(0, ...findings.map((f) => SEV_RANK[f.severity]));
   if (max >= 3) return { label: "Blocked", tone: "critical", detail: "High or critical issues must be fixed or disputed before review." };
   if (max === 2) return { label: "Needs fixes", tone: "medium", detail: "Medium issues found. Fix or dispute them before review." };
-  return { label: "Ready for review", tone: "success", detail: findings.length ? "Only low-severity hints remain." : "No issues found." };
+  return { label: "Passes checks", tone: "success", detail: findings.length ? "Only low-severity hints remain." : "No issues found." };
 }

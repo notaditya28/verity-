@@ -113,7 +113,9 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
             {check.aiStatus === "completed"
               ? `done (${check.model}, prompt ${check.promptVersion})`
               : check.aiStatus === "failed"
-                ? "pending (retry below)"
+                ? editable
+                  ? "didn’t finish (retry below)"
+                  : "didn’t finish"
                 : check.aiStatus}
             {check.redactions.length > 0 && ` · redacted before AI: ${check.redactions.map((r) => `${r.count} ${r.type}`).join(", ")}`}
           </p>

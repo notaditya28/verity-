@@ -93,7 +93,7 @@ export default async function BrandPage() {
             <tbody>
               {facts.map((f) => (
                 <tr key={f.id} className="border-t align-top">
-                  <td className="px-3 py-2 font-mono font-medium">{f.code}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono font-medium">{f.code}</td>
                   <td className="px-3 py-2">{f.subject}</td>
                   <td className="px-3 py-2">{f.attribute}</td>
                   <td className="px-3 py-2 font-medium">
