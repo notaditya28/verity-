@@ -29,7 +29,8 @@
 - **Contrast measurement:** Gemini only locates the text (boxes). The colours and ratio are measured from the pixels in code, so the number shown is not an LLM guess. The model's colour estimate is used only when a box can't be measured, and the finding says “estimated”.
 - **Body-only rules:** ASCI-01 (disclosure) and A-03 (readability) run on the body text only, not on text in the image.
 - **Alt-text fix:** accepting the A-01 fix sets the next version's alt text. This is the one non-text fix the app applies.
-- **Time budget:** image reading (13 s) plus the judge call (16 s when the image was read in the same check) keep a full check under 30 s.
+- **Time budget:** text-only checks finish well under 30 s (about 7–18 s measured live). Image checks add a Gemini vision call, which on the free tier varied from 5 to 10 s (with rare outliers far longer) in our tests. Vision gets up to 20 s and the judge up to 18 s, so a slow image check can take up to about 40 s, inside the 60 s function limit. We chose reliability over a hard 30 s cap. If vision still times out, the rule, palette and alt-text findings are kept and “Retry AI checks” re-reads the image.
+- **Transient AI errors:** a 429 (rate limit) or 503 (overloaded) that comes back quickly is retried once after 1.5 s.
 - **Logo check:** not built (it was last on the cut list). `brand_assets.logo_url` stays in the schema.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
 - **Evaluation set:** the labelled cases in `scripts/eval-cases.ts` are separate from the demo samples, and misses are reported rather than tuned away. The AI part of the eval gives the model every seed rule and fact as context, so it runs without a database.

@@ -59,8 +59,8 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
       extractedText,
       ctx,
       deterministic: drafts,
-      // Keep the whole check under ~30 s when the image was read during this check.
-      timeoutMs: image?.readNow ? 16_000 : undefined,
+      // Image checks: vision (≤ 20 s) + judge (≤ 18 s) stays inside the 60 s function limit; typical total is ~15 s.
+      timeoutMs: image?.readNow ? 18_000 : undefined,
     });
     // An image that couldn't be read counts as an AI failure: the page offers a retry, which re-reads it.
     const aiStatus = image?.error ? "failed" : ai.status;

@@ -57,11 +57,12 @@ export async function generateJson(args: {
 }): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), args.timeoutMs);
-  try {
-    const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [];
-    if (args.image) parts.push({ inlineData: { mimeType: args.image.mimeType, data: args.image.base64 } });
-    parts.push({ text: args.prompt });
-    const res = await getClient().models.generateContent({
+  const started = Date.now();
+  const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [];
+  if (args.image) parts.push({ inlineData: { mimeType: args.image.mimeType, data: args.image.base64 } });
+  parts.push({ text: args.prompt });
+  const call = () =>
+    getClient().models.generateContent({
       model: geminiModel(),
       contents: [{ role: "user", parts }],
       config: {
@@ -72,6 +73,18 @@ export async function generateJson(args: {
         abortSignal: controller.signal,
       },
     });
+  try {
+    let res;
+    try {
+      res = await call();
+    } catch (err) {
+      // One quick retry for "busy" answers (429 rate limit, 503 overloaded) that come back fast, if time allows.
+      const msg = err instanceof Error ? err.message : String(err);
+      const transient = /"code":\s*(429|503)|\b(429|503)\b/.test(msg);
+      if (!transient || controller.signal.aborted || Date.now() - started > args.timeoutMs / 3) throw err;
+      await new Promise((r) => setTimeout(r, 1500));
+      res = await call();
+    }
     const text = res.text;
     if (!text) throw new Error("AI returned an empty response");
     return JSON.parse(text);

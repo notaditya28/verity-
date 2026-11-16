@@ -4,7 +4,7 @@ import { generateJson } from "../ai/gemini";
 import { VISION_PROMPT, VISION_RESPONSE_SCHEMA, VISION_SYSTEM } from "../prompts/vision";
 export { dominantColours, measureTextBlocks, type DominantColour, type MeasuredBlock } from "./pixels";
 
-export const VISION_TIMEOUT_MS = 13_000;
+export const VISION_TIMEOUT_MS = 20_000;
 
 export function decodeDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } | null {
   const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s.exec(dataUrl);
