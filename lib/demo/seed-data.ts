@@ -32,7 +32,7 @@ export const SEED_RULES: SeedRule[] = [
     severity: "medium",
     checkType: "deterministic",
     params: {
-      patterns: ["\\bOMG\\b", "!{2,}", "\\binsane\\b", "\\bcrazy\\b", "\\bobsessed\\b", "\\bslay(s|ing)?\\b"],
+      patterns: ["\\bOMG\\b[!?.,]*\\s*", "!{2,}", "\\binsane(ly)?\\b", "\\bcrazy\\b", "\\bobsessed\\b", "\\bslay(s|ing)?\\b"],
       allCapsMinLength: 4,
       allCapsAllow: ["SPF", "ASCI", "INR", "UVA", "UVB", "PA"],
     },
@@ -72,8 +72,15 @@ export const SEED_RULES: SeedRule[] = [
     severity: "high",
     checkType: "deterministic",
     params: {
-      patterns: ["#\\s?1\\b", "\\bno\\.?\\s?1\\b", "\\bnumber one\\b", "\\bbest\\b", "\\btop\\b", "\\bmost effective\\b"],
-      supportingFacts: { "best-seller": "F-40", "best seller": "F-40", bestseller: "F-40" },
+      // "#1"-style claims (optionally with "India's" etc.), plain superlatives, and best-seller claims
+      rankPattern: "(?:\\b(?:india|the world|the country|asia)['’]?s\\s+)?(?:#\\s?1|\\bno\\.?\\s?1|\\bnumber one)\\b",
+      patterns: [
+        "\\b(?:the\\s+)?best\\b(?![- ]?sell)(?!\\s+(?:wishes|regards)\\b)",
+        "\\btop(?:-rated)?\\b(?!\\s+(?:up|of|off|it)\\b)",
+        "\\bmost effective\\b",
+      ],
+      bestSellerPattern: "\\bbest[- ]?sell(?:er|ing)\\b",
+      supportingFact: "F-40",
     },
   },
   {
@@ -97,8 +104,9 @@ export const SEED_RULES: SeedRule[] = [
   {
     code: "C-03",
     category: "claims",
-    title: "Prices must match the Fact Registry",
-    description: "Any price or offer threshold stated in content must exactly match the current approved fact.",
+    title: "Prices and product numbers must match the Fact Registry",
+    description:
+      "Any price, offer threshold, concentration or SPF stated in content must exactly match the current approved fact.",
     severity: "critical",
     checkType: "deterministic",
   },
@@ -110,7 +118,12 @@ export const SEED_RULES: SeedRule[] = [
       'Use "clinically proven" only when an approved clinical-study fact exists. Otherwise use an approved claim such as "dermatologically tested".',
     severity: "critical",
     checkType: "deterministic",
-    params: { patterns: ["\\bclinically (proven|tested|shown)\\b"], factCode: "F-21" },
+    params: {
+      patterns: ["\\bclinically (proven|tested|shown)\\b"],
+      factCode: "F-21",
+      alternativeFactCode: "F-20",
+      alternative: "dermatologically tested",
+    },
   },
   {
     code: "ASCI-01",
@@ -134,7 +147,23 @@ export const SEED_RULES: SeedRule[] = [
     severity: "critical",
     checkType: "deterministic",
     params: {
-      patterns: ["\\bcur(e|es|ed|ing)\\b", "\\btreat(s|ed|ing|ment)?\\b", "\\bheal(s|ed|ing)?\\b", "\\beliminat(e|es|ed)\\b"],
+      // "cure"/"heal" are always flagged; "treat"/"eliminate"/"get rid of" only next to a condition word
+      alwaysVerbs: ["cure", "cures", "cured", "curing", "heal", "heals", "healed", "healing"],
+      conditionVerbs: ["treat", "treats", "treated", "treating", "eliminate", "eliminates", "eliminated", "get rid of", "gets rid of"],
+      conditions: {
+        acne: "blemishes",
+        pimples: "blemishes",
+        pimple: "blemishes",
+        breakouts: "blemishes",
+        eczema: "dryness and redness",
+        psoriasis: "dryness and redness",
+        dermatitis: "dryness and redness",
+        rosacea: "redness",
+        pigmentation: "dark spots",
+        hyperpigmentation: "dark spots",
+        melasma: "dark spots",
+        scars: "the look of marks",
+      },
     },
   },
   {
@@ -146,7 +175,12 @@ export const SEED_RULES: SeedRule[] = [
     severity: "high",
     checkType: "deterministic",
     params: {
-      patterns: ["\\bnext[- ]day\\b", "\\bsame[- ]day\\b", "\\b24[- ]?(hour|hr)s?\\b", "\\bdelivered tomorrow\\b", "\\bovernight (delivery|shipping)\\b"],
+      patterns: [
+        "\\b(?:next|same)[- ]day(?:\\s+(?:delivery|shipping|dispatch))?\\b",
+        "\\b24[- ]?(?:hour|hr)s?\\s+(?:delivery|shipping|dispatch)\\b",
+        "\\bdelivered tomorrow\\b",
+        "\\bovernight (?:delivery|shipping)\\b",
+      ],
       factCode: "F-30",
     },
   },
@@ -210,6 +244,8 @@ export const SEED_TERMS: SeedTerm[] = [
   { banned: "Vit-C serum", preferred: "Lumina Vitamin C Serum", ruleCode: "TERM-01" },
   { banned: "VitC serum", preferred: "Lumina Vitamin C Serum", ruleCode: "TERM-01" },
   { banned: "Vitamin-C serum", preferred: "Lumina Vitamin C Serum", ruleCode: "TERM-01" },
+  { banned: "Vit C serum", preferred: "Lumina Vitamin C Serum", ruleCode: "TERM-01" },
+  { banned: "Lumina Vit C", preferred: "Lumina Vitamin C Serum", ruleCode: "TERM-01" },
   { banned: "fairness", preferred: "radiance", ruleCode: "T-03" },
   { banned: "whitening", preferred: "brightening", ruleCode: "T-03" },
   { banned: "fair skin", preferred: "radiant skin", ruleCode: "T-03" },

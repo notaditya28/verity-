@@ -14,4 +14,7 @@
 - **Demo org:** fixed UUID (`lib/demo/constants.ts`). "Reset demo" wipes and re-seeds only that org.
 - **Extra columns beyond the brief:** `facts.current`, `submission_versions.alt_text` / `visual_description`, `checks.ai_status` / `redactions`, `findings.edited_fix`. Each is needed for a feature in the brief (versioned facts, A-01 alt text, image description, AI retry, redaction log, the "Edit" decision).
 - **Extra rules:** `T-01` (voice, AI), `T-03` (no fairness/whitening language, a common Indian beauty-ad issue), `M-02` (goal/audience/CTA fit, AI) and `A-03` (readability hint).
+- **Fix format:** `suggested_fix` is machine-applicable. With a span it replaces the quote (empty means delete). With `span_start = span_end` it is inserted at that point. With no span it is advice only. This is what lets "Apply accepted fixes" build the next version without another LLM call.
+- **Numbers beyond prices:** C-03 also checks vitamin C % and SPF against the registry, as the brief says "prices and numbers".
+- **Unmatched prices:** a ₹ amount that matches no fact becomes `needs_human_verification`, not a hard flag (no source, no hard flag).
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
