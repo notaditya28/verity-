@@ -1,5 +1,5 @@
 import "server-only";
-import { generateJson, geminiConfigured, geminiModel } from "../ai/gemini";
+import { friendlyAiError, generateJson, geminiConfigured, geminiModel } from "../ai/gemini";
 import { buildJudgePrompt, JUDGE_RESPONSE_SCHEMA, JUDGE_SYSTEM, PROMPT_VERSION } from "../prompts/judge";
 import { pgTextRetriever, type Retriever } from "./retrieve";
 import type { CheckContext, DraftFinding } from "./types";
@@ -73,8 +73,7 @@ export async function runAiStage(args: {
       retrieved: { rules: retrieved.rules.map((r) => r.code), facts: retrieved.facts.map((f) => f.code) },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("AI stage failed:", msg);
-    return { status: "failed", error: msg.slice(0, 300), model, promptVersion: PROMPT_VERSION };
+    console.error("AI stage failed:", err instanceof Error ? err.message : err);
+    return { status: "failed", error: friendlyAiError(err), model, promptVersion: PROMPT_VERSION };
   }
 }

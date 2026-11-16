@@ -124,14 +124,14 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
           <AlertTriangle className="h-4 w-4" aria-hidden />
           {check?.error ? `The check failed: ${check.error}` : "This version has not been checked yet."}
-          {version && <RerunButton versionId={version.id} />}
+          {version && editable && <RerunButton versionId={version.id} />}
         </div>
       )}
       {check && check.status !== "failed" && check.aiStatus === "failed" && (
         <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
           <AlertTriangle className="h-4 w-4" aria-hidden />
           <span>AI tone and claim checks didn’t finish{check.error ? ` (${check.error})` : ""}. Rule findings are shown below.</span>
-          {version && <RerunButton versionId={version.id} label="Retry AI checks" />}
+          {version && editable && <RerunButton versionId={version.id} label="Retry AI checks" />}
         </div>
       )}
       {check && check.aiStatus === "skipped" && (

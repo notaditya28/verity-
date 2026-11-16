@@ -29,8 +29,10 @@
 - **Contrast measurement:** Gemini only locates the text (boxes). The colours and ratio are measured from the pixels in code, so the number shown is not an LLM guess. The model's colour estimate is used only when a box can't be measured, and the finding says “estimated”.
 - **Body-only rules:** ASCI-01 (disclosure) and A-03 (readability) run on the body text only, not on text in the image.
 - **Alt-text fix:** accepting the A-01 fix sets the next version's alt text. This is the one non-text fix the app applies.
-- **Time budget:** image reading (10 s) plus the judge call (18 s when the image was read in the same check) keep a full check under 30 s.
+- **Time budget:** image reading (13 s) plus the judge call (16 s when the image was read in the same check) keep a full check under 30 s.
 - **Logo check:** not built (it was last on the cut list). `brand_assets.logo_url` stays in the schema.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
 - **Evaluation set:** the labelled cases in `scripts/eval-cases.ts` are separate from the demo samples, and misses are reported rather than tuned away. The AI part of the eval gives the model every seed rule and fact as context, so it runs without a database.
 - **Eval runner:** `npm run eval` uses `tsx --conditions=react-server` so server-only modules (the Gemini client) can be imported from a script.
+- **Model:** `gemini-2.5-flash` is no longer available to new API keys, so the default is `gemini-3.5-flash`. It was the fastest model that worked with structured JSON output for this key: about 2 s for a trivial call, against timeouts from 3.7 and 3.8 Flash. The model is still read from `GEMINI_MODEL`.
+- **Re-check after review:** “Retry AI checks” and re-running a check are only allowed while the submission is with the creator (draft or changes requested), so an approved result can't change underneath the approval.

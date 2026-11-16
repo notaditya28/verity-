@@ -28,6 +28,25 @@ export class AiTimeoutError extends Error {
   }
 }
 
+/**
+ * Short, readable error text for the UI and audit log. Gemini API errors arrive as a JSON string; we keep the status
+ * code and the first sentence of the message instead of showing raw JSON.
+ */
+export function friendlyAiError(err: unknown): string {
+  if (err instanceof AiTimeoutError) return err.message;
+  const raw = err instanceof Error ? err.message : String(err);
+  try {
+    const j = JSON.parse(raw.slice(raw.indexOf("{"))) as { error?: { code?: number; message?: string } };
+    if (j.error?.message) {
+      const first = j.error.message.split(/(?<=\.)\s/)[0];
+      return `Gemini error${j.error.code ? ` ${j.error.code}` : ""}: ${first}`.slice(0, 200);
+    }
+  } catch {
+    /* not JSON */
+  }
+  return raw.slice(0, 200);
+}
+
 /** One structured-JSON call at temperature 0, with a hard timeout. Returns the raw parsed JSON (validate with zod!). */
 export async function generateJson(args: {
   system: string;

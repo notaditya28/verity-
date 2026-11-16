@@ -1,6 +1,6 @@
 import "server-only";
 import { eq } from "drizzle-orm";
-import { geminiConfigured } from "../ai/gemini";
+import { friendlyAiError, geminiConfigured } from "../ai/gemini";
 import { getDb, schema } from "../db";
 import type { SubmissionVersion } from "../db/schema";
 import { decodeDataUrl, dominantColours, measureTextBlocks, readImage } from "../images/analyze";
@@ -75,8 +75,7 @@ export async function runImageStage(version: SubmissionVersion): Promise<ImageSt
       skippedReason: null,
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("image reading failed:", msg);
-    return { facts: { ...base, colours }, extractedText: null, readNow: true, error: `Could not read the image text: ${msg.slice(0, 200)}`, skippedReason: null };
+    console.error("image reading failed:", err instanceof Error ? err.message : err);
+    return { facts: { ...base, colours }, extractedText: null, readNow: true, error: `Could not read the image text (${friendlyAiError(err)})`, skippedReason: null };
   }
 }

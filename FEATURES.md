@@ -56,7 +56,7 @@
 
 ### M5 — Images
 - Upload a PNG, JPEG or WebP (up to 1.5 MB) with alt text. Sample 4 ("Ad image (off-palette)") loads a generated festive banner
-- **Gemini vision** reads the image once per version (`lib/prompts/vision.ts`, `vision-v1`, 10 s timeout, zod-validated): all visible text, a short description, and up to 6 text blocks with boxes. The result is saved on the version, so re-checks don't call it again
+- **Gemini vision** reads the image once per version (`lib/prompts/vision.ts`, `vision-v1`, 13 s timeout, zod-validated): all visible text, a short description, and up to 6 text blocks with boxes. The result is saved on the version, so re-checks don't call it again
 - **Text in the image goes through the same rule checks** as the body (price vs Fact Registry, superlatives, guarantees, terminology…). Image findings have no text span, so their fix is advice such as “In the image, change ₹399 to ₹449”. The AI judge also sees the image text
 - **A-02 contrast (WCAG 2.1, 4.5:1):** each text block is cropped with `sharp`, and its pixels are split into text and background colours with two-colour k-means. The ratio is computed in code, and the fix suggests the palette colour with the best contrast on that background. If the crop can't be measured, the model's colour estimate is used and the finding says so
 - **V-01 palette:** dominant colours come from `node-vibrant`. Any colour covering ≥ 8% of the image with CIEDE2000 ΔE > 12 from every palette colour is flagged, along with the nearest palette colour
