@@ -146,6 +146,11 @@ export const submissionVersions = pgTable(
     altText: text("alt_text"),
     extractedText: text("extracted_text"),
     visualDescription: text("visual_description"),
+    // Text blocks (with measured colours) and dominant colours from the image, so re-checks don't re-read it.
+    imageAnalysis: jsonb("image_analysis").$type<{
+      blocks: { text: string; textHex: string; backgroundHex: string; method: "measured" | "estimated" }[];
+      colours: { hex: string; share: number }[];
+    }>(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("submission_versions_unique").on(t.submissionId, t.versionNumber)],

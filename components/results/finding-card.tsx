@@ -3,10 +3,36 @@ import type { Fact, Finding, Rule } from "@/lib/db/schema";
 import { factValueDisplay } from "@/lib/checks/format";
 import { LABEL_TEXT } from "./severity";
 
+/** Renders text with a small colour swatch before every #RRGGBB code (for palette and contrast findings). */
+function WithSwatches({ text }: { text: string }) {
+  const parts = text.split(/(#[0-9A-Fa-f]{6})/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^#[0-9A-Fa-f]{6}$/.test(p) ? (
+          <span key={i} className="whitespace-nowrap">
+            <span className="mr-0.5 inline-block h-3 w-3 rounded-sm border align-[-1px]" style={{ background: p }} aria-hidden />
+            <span className="font-mono text-xs">{p}</span>
+          </span>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 function FixText({ f }: { f: Finding }) {
   const fix = f.editedFix ?? f.suggestedFix;
   if (fix === null) return null;
-  if (f.spanStart === null || f.spanEnd === null) return <p className="text-sm">{fix}</p>;
+  if (f.ruleCode === "A-01" && f.spanStart === null) {
+    return (
+      <p className="text-sm">
+        Set the alt text to: <ins className="rounded bg-emerald-100 px-1 text-emerald-900 no-underline">{fix}</ins>
+      </p>
+    );
+  }
+  if (f.spanStart === null || f.spanEnd === null) return <p className="text-sm"><WithSwatches text={fix} /></p>;
   if (f.spanStart === f.spanEnd) {
     return (
       <p className="text-sm">
@@ -69,7 +95,14 @@ export function FindingCard({
           Found: “{f.quote.trim()}”
         </a>
       )}
-      <p className="text-sm">{f.explanation}</p>
+      {f.quote && f.spanStart === null && (
+        <p className="text-sm text-muted-foreground">
+          {f.ruleCode === "A-01" ? "Alt text" : "In the image"}: “{f.quote.trim()}”
+        </p>
+      )}
+      <p className="text-sm">
+        <WithSwatches text={f.explanation} />
+      </p>
       {f.evidence && (
         <blockquote className="border-l-2 border-primary/40 pl-2 text-xs text-muted-foreground">{f.evidence}</blockquote>
       )}

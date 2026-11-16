@@ -1,3 +1,8 @@
+/** A fix the app can apply for the creator: a text span fix, or the proposed alt text for A-01. */
+export function isAutoApplicable(f: { ruleCode: string | null; spanStart: number | null; suggestedFix: string | null }): boolean {
+  return f.suggestedFix !== null && (f.spanStart !== null || (f.ruleCode === "A-01" && f.suggestedFix.trim() !== ""));
+}
+
 export interface ApplicableFix {
   spanStart: number | null;
   spanEnd: number | null;

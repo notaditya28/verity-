@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { uuidSchema } from "@/lib/validation";
-import { applicableFixes, audit, EDITABLE_STATUSES, isBlocking, jsonError, loadLatest, requireRole } from "@/lib/workflow";
+import { acceptedAltText, applicableFixes, audit, EDITABLE_STATUSES, isBlocking, jsonError, loadLatest, requireRole } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!check || check.status === "running" || check.status === "failed") {
       return jsonError("Run a successful check on this version before submitting.", 409);
     }
-    if (applicableFixes(findings).length > 0) {
+    const alt = acceptedAltText(findings);
+    if (applicableFixes(findings).length > 0 || (alt !== null && alt !== version.altText)) {
       return jsonError("You have accepted fixes that aren't applied yet. Click “Apply accepted fixes” first.", 409);
     }
     const blockers = findings.filter(isBlocking);

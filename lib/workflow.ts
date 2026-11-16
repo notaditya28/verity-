@@ -58,6 +58,13 @@ export function applicableFixes(findings: Finding[]) {
     .filter((f) => f.fix !== null);
 }
 
+/** Alt text from an accepted/edited A-01 finding (image alt-text fixes update the next version's alt text). */
+export function acceptedAltText(findings: Finding[]): string | null {
+  const f = findings.find((x) => x.ruleCode === "A-01" && (x.creatorDecision === "accepted" || x.creatorDecision === "edited"));
+  const alt = f ? (f.creatorDecision === "edited" ? f.editedFix : f.suggestedFix) : null;
+  return alt?.trim() ? alt.trim().slice(0, 500) : null;
+}
+
 export function isBlocking(f: Pick<Finding, "severity" | "creatorDecision">) {
   return (f.severity === "high" || f.severity === "critical") && f.creatorDecision === "pending";
 }

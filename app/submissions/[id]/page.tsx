@@ -8,6 +8,7 @@ import { HighlightedText } from "@/components/results/highlighted-text";
 import { overallStatus, SEV_RANK } from "@/components/results/severity";
 import { VersionDiff } from "@/components/results/version-diff";
 import { StatusBadge } from "@/components/status-badge";
+import { isAutoApplicable } from "@/lib/checks/apply";
 import { CreatorToolbar } from "@/components/workflow/creator-toolbar";
 import { FindingActions } from "@/components/workflow/finding-actions";
 import { ManagerPanel } from "@/components/workflow/manager-panel";
@@ -55,9 +56,12 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
   );
   const counts = (["critical", "high", "medium", "low"] as const).map((s) => ({ s, n: open.filter((f) => f.severity === s).length }));
   const status = overallStatus(open);
-  const pendingFixable = open.filter((f) => f.spanStart !== null && f.suggestedFix !== null).length;
+  const pendingFixable = open.filter(isAutoApplicable).length;
   const toApply = findings.filter(
-    (f) => (f.creatorDecision === "accepted" || f.creatorDecision === "edited") && f.spanStart !== null && (f.creatorDecision === "edited" ? f.editedFix : f.suggestedFix) !== null,
+    (f) =>
+      (f.creatorDecision === "accepted" || f.creatorDecision === "edited") &&
+      (f.spanStart !== null || f.ruleCode === "A-01") &&
+      !!(f.creatorDecision === "edited" ? f.editedFix : f.suggestedFix)?.trim().length,
   ).length;
   const blockers = open.filter((f) => f.severity === "high" || f.severity === "critical").length;
   const lastRequest = decisions.find((d) => d.action === "request_changes");
@@ -170,6 +174,48 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
           {version?.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={version.imageUrl} alt={version.altText ?? "Submitted image (no alt text provided)"} className="max-h-80 rounded-lg border" />
+          )}
+          {version?.imageUrl && (
+            <details className="rounded-lg border p-3 text-sm" open>
+              <summary className="cursor-pointer font-semibold">What Verity read from the image</summary>
+              <dl className="mt-2 space-y-2">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alt text</dt>
+                  <dd>{version.altText ?? <span className="text-muted-foreground">None provided</span>}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Text in the image (Gemini vision)</dt>
+                  <dd className="whitespace-pre-wrap">
+                    {version.extractedText === null ? (
+                      <span className="text-muted-foreground">Not read yet (AI off or failed)</span>
+                    ) : version.extractedText ? (
+                      version.extractedText
+                    ) : (
+                      <span className="text-muted-foreground">No text found</span>
+                    )}
+                  </dd>
+                </div>
+                {version.visualDescription && (
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</dt>
+                    <dd>{version.visualDescription}</dd>
+                  </div>
+                )}
+                {!!version.imageAnalysis?.colours.length && (
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dominant colours</dt>
+                    <dd className="mt-1 flex flex-wrap gap-2">
+                      {version.imageAnalysis.colours.map((c) => (
+                        <span key={c.hex} className="inline-flex items-center gap-1 text-xs">
+                          <span className="h-4 w-4 rounded border" style={{ background: c.hex }} aria-hidden />
+                          <span className="font-mono">{c.hex}</span> {Math.round(c.share * 100)}%
+                        </span>
+                      ))}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </details>
           )}
           <p className="text-xs text-muted-foreground">Highlights show open findings. Colour shows severity: blue low, amber medium, orange high, red critical.</p>
           {prevVersion && version && (

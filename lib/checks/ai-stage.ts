@@ -36,6 +36,7 @@ export async function runAiStage(args: {
   ctx: CheckContext;
   deterministic: DraftFinding[];
   retriever?: Retriever;
+  timeoutMs?: number;
 }): Promise<AiStageResult> {
   if (!geminiConfigured()) return { status: "skipped", reason: "AI checks are off: GEMINI_API_KEY / GEMINI_MODEL not set." };
   const model = geminiModel();
@@ -55,7 +56,7 @@ export async function runAiStage(args: {
       facts: retrieved.facts,
       alreadyFound: args.deterministic,
     });
-    const raw = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: AI_TIMEOUT_MS });
+    const raw = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS });
     const { findings, stats } = validateAiFindings(raw, {
       text: args.text,
       extractedText: args.extractedText,

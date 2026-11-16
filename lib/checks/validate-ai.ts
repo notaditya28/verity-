@@ -110,17 +110,17 @@ export function validateAiFindings(
       notes.push(`Confidence ${Math.round(a.confidence * 100)}% is below the ${MIN_CONFIDENCE * 100}% threshold.`);
     }
 
-    // Duplicate of a deterministic finding: overlapping span and the same rule, fact or category.
-    const dup = args.deterministic.some(
-      (d) =>
-        d.spanStart !== null &&
-        d.spanEnd !== null &&
-        spanStart !== null &&
-        spanEnd !== null &&
-        spanStart < d.spanEnd &&
-        d.spanStart < spanEnd &&
-        ((rule && d.ruleCode === rule.code) || (fact && d.factCode === fact.code) || d.category === a.category || d.category === rule?.category),
-    );
+    // Duplicate of a deterministic finding: overlapping span (or, for image text, overlapping quote) and the same
+    // rule, fact or category.
+    const dup = args.deterministic.some((d) => {
+      const sameTopic =
+        (rule && d.ruleCode === rule.code) || (fact && d.factCode === fact.code) || d.category === a.category || d.category === rule?.category;
+      if (!sameTopic) return false;
+      if (d.spanStart !== null && d.spanEnd !== null && spanStart !== null && spanEnd !== null) {
+        return spanStart < d.spanEnd && d.spanStart < spanEnd;
+      }
+      return spanStart === null && d.spanStart === null && !!d.quote && (d.quote.includes(quote) || quote.includes(d.quote));
+    });
     if (dup) {
       stats.droppedDuplicate++;
       continue;

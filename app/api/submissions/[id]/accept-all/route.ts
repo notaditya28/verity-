@@ -1,3 +1,4 @@
+import { isAutoApplicable } from "@/lib/checks/apply";
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
@@ -19,7 +20,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       return jsonError("This submission is with the reviewer, so decisions are locked.", 409);
     }
     const ids = data.findings
-      .filter((f) => f.creatorDecision === "pending" && f.spanStart !== null && f.suggestedFix !== null)
+      .filter((f) => f.creatorDecision === "pending" && isAutoApplicable(f))
       .map((f) => f.id);
     if (ids.length) {
       await getDb()

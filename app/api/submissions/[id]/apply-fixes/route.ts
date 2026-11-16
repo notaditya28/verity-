@@ -4,7 +4,7 @@ import { getDb, schema } from "@/lib/db";
 import { applyFixes } from "@/lib/checks/apply";
 import { runCheck } from "@/lib/checks/run";
 import { uuidSchema } from "@/lib/validation";
-import { applicableFixes, audit, EDITABLE_STATUSES, jsonError, loadLatest, requireRole } from "@/lib/workflow";
+import { acceptedAltText, applicableFixes, audit, EDITABLE_STATUSES, jsonError, loadLatest, requireRole } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,9 +24,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       return jsonError("This submission is with the reviewer and can't be changed right now.", 409);
     }
     const fixes = applicableFixes(findings);
-    if (fixes.length === 0) return jsonError("Accept or edit at least one fix first.", 400);
+    const newAlt = acceptedAltText(findings);
+    if (fixes.length === 0 && newAlt === null) return jsonError("Accept or edit at least one fix first.", 400);
     const result = applyFixes(version.text, fixes);
-    if (result.text === version.text) return jsonError("The accepted fixes don't change the text.", 400);
+    if (result.text === version.text && (newAlt === null || newAlt === version.altText)) {
+      return jsonError("The accepted fixes don't change the content.", 400);
+    }
 
     const db = getDb();
     const nextNumber = version.versionNumber + 1;
@@ -37,9 +40,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         versionNumber: nextNumber,
         text: result.text,
         imageUrl: version.imageUrl,
-        altText: version.altText,
+        altText: newAlt ?? version.altText,
         extractedText: version.extractedText,
         visualDescription: version.visualDescription,
+        imageAnalysis: version.imageAnalysis,
       })
       .returning();
     await db
@@ -51,6 +55,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       to: nextNumber,
       appliedFixes: result.applied,
       skippedFixes: result.skipped,
+      altTextUpdated: newAlt !== null && newAlt !== version.altText,
     });
 
     let checkError: string | null = null;

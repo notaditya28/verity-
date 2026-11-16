@@ -25,4 +25,10 @@
 - **Submit gate:** high and critical findings must be decided (accepted and applied, or disputed) before submitting. Low and medium findings can go to the reviewer undecided.
 - **Escalation flow:** "Escalate to Legal" sets status `escalated`. The same manager panel then offers Approve or Request changes as the Legal decision. There is no separate Legal role in the MVP.
 - **Fact edits** are Manager-only. They set `valid_from` to today on the new row.
+- **Image text findings are advice-only:** the app can't edit pixels, so findings from text in the image carry an “In the image, change … to …” fix. A creator handles them by uploading a corrected design in a new submission, or by disputing them. Replacing the image inside an existing submission is not built.
+- **Contrast measurement:** Gemini only locates the text (boxes). The colours and ratio are measured from the pixels in code, so the number shown is not an LLM guess. The model's colour estimate is used only when a box can't be measured, and the finding says “estimated”.
+- **Body-only rules:** ASCI-01 (disclosure) and A-03 (readability) run on the body text only, not on text in the image.
+- **Alt-text fix:** accepting the A-01 fix sets the next version's alt text. This is the one non-text fix the app applies.
+- **Time budget:** image reading (10 s) plus the judge call (18 s when the image was read in the same check) keep a full check under 30 s.
+- **Logo check:** not built (it was last on the cut list). `brand_assets.logo_url` stays in the schema.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.
