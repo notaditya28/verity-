@@ -40,5 +40,19 @@
 - Failure mode: if Gemini errors or times out, the rule findings are still saved, the check is marked `partial`, and the results page shows "Retry AI checks". With no API key the AI stage is skipped and the page says so
 - Each check row stores `policy_version_id`, `prompt_version` and `model`. The audit log records the provider, model, retrieved codes, validation stats and redaction counts
 
+### M4 — Decisions and workflow
+- Creator decisions on every finding: **Accept**, **Edit** (your own replacement) or **Dispute** (reason required), with Undo. "Accept all fixes" handles the quick path
+- **Apply accepted fixes → new version**: builds v(n+1) from the accepted or edited fixes (overlaps resolved in order), re-runs the full check, shows a word-level **version diff**, and carries disputes forward to matching findings
+- **Submit for review** is blocked while any high or critical finding is undecided, or while accepted fixes haven't been applied. The API gives a friendly reason
+- Manager view, through the header role switcher:
+  - `/review` lists the queue with finding, dispute and open-high counts
+  - the submission page shows the creator's decisions plus **Approve / Request changes / Escalate to Legal**. A comment is required for request changes and escalate
+  - escalated items can then be approved or sent back
+- "Changes requested" shows the manager's comment to the creator, and the page has a review history
+- `/brand` Fact Registry editing (Manager): each edit creates a new policy version and a new fact row. The old row is kept (`current = false`) and new checks use the new value
+- Every action is written to the append-only audit log: decisions, accept-all, version created, submitted, approve, request changes, escalate, fact updated
+- Roles are enforced on the server for every workflow API
+- `scripts/test-workflow.ts` tests the diff and fix application
+
 ## In progress
-- M4 decisions and workflow
+- M5 images

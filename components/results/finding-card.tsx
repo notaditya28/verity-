@@ -81,6 +81,14 @@ export function FindingCard({
           <FixText f={f} />
         </div>
       )}
+      {f.creatorDecision !== "pending" && (
+        <p className="text-sm">
+          <Badge variant={f.creatorDecision === "disputed" ? "medium" : "success"} className="mr-1.5">
+            Creator: {f.creatorDecision}
+          </Badge>
+          {f.creatorDecision === "disputed" && f.disputeReason && <span className="text-muted-foreground">“{f.disputeReason}”</span>}
+        </p>
+      )}
       {children}
     </article>
   );

@@ -21,4 +21,8 @@
 - **AI citation format:** the JSON schema uses `""` for "no code" instead of `null`. Plain strings are the most portable structured-output type across Gemini models.
 - **AI retry:** "Retry AI checks" re-runs the whole check as a new check row (rule checks are fast and deterministic). That keeps every attempt in the history.
 - **AI "supported" findings** are dropped rather than shown, to keep the findings list to actionable issues.
+- **Manager detail view** reuses `/submissions/[id]` with a manager panel instead of a separate `/review/[id]` page. `/review` is the queue. It's one page to maintain, and both roles see the same evidence.
+- **Submit gate:** high and critical findings must be decided (accepted and applied, or disputed) before submitting. Low and medium findings can go to the reviewer undecided.
+- **Escalation flow:** "Escalate to Legal" sets status `escalated`. The same manager panel then offers Approve or Request changes as the Legal decision. There is no separate Legal role in the MVP.
+- **Fact edits** are Manager-only. They set `valid_from` to today on the new row.
 - **ASCI-01 scope:** every `instagram` submission is treated as a potential paid or gifted influencer post and must carry a disclosure.

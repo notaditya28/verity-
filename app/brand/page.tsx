@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DbError } from "@/components/db-error";
 import { getBrandData } from "@/lib/queries";
+import { getRole } from "@/lib/role";
+import { FactEditor } from "./fact-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default async function BrandPage() {
   let data: Awaited<ReturnType<typeof getBrandData>>;
+  const isManager = (await getRole()) === "manager";
   try {
     data = await getBrandData();
   } catch (err) {
@@ -67,6 +70,11 @@ export default async function BrandPage() {
 
       <section aria-labelledby="facts-h" className="space-y-3">
         <h2 id="facts-h" className="text-lg font-semibold">Fact Registry</h2>
+        <p className="text-sm text-muted-foreground">
+          {isManager
+            ? "Editing a fact creates a new policy version. The old value is kept for the audit trail, and new checks use the new value."
+            : "Switch to Manager in the header to edit facts. Every edit creates a new policy version."}
+        </p>
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted text-xs uppercase text-muted-foreground">
@@ -79,6 +87,7 @@ export default async function BrandPage() {
                 <th className="px-3 py-2">Source</th>
                 <th className="px-3 py-2">Valid</th>
                 <th className="px-3 py-2">Ver.</th>
+                {isManager && <th className="px-3 py-2"><span className="sr-only">Edit</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -96,6 +105,11 @@ export default async function BrandPage() {
                     {f.validFrom} → {f.validUntil ?? "open"}
                   </td>
                   <td className="px-3 py-2">v{versionById.get(f.policyVersionId) ?? "?"}</td>
+                  {isManager && (
+                    <td className="px-3 py-2">
+                      <FactEditor code={f.code} value={f.value} validUntil={f.validUntil} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
