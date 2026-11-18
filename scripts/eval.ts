@@ -190,10 +190,10 @@ async function main() {
     const { runAiStage } = await import("../lib/checks/ai-stage");
     const { readImage } = await import("../lib/images/analyze");
     const allRetriever = { retrieve: async () => ({ rules: ctx.rules, facts: ctx.facts, trace: [] }) };
-    out(`Model: \`${process.env.GEMINI_MODEL}\`, temperature 0. All seed rules and facts are given as the retrieved context.`);
+    out(`Main model: \`${process.env.GEMINI_MODEL}\`${process.env.GEMINI_FALLBACK_MODEL ? `, backup: \`${process.env.GEMINI_FALLBACK_MODEL}\` (used only when the main model answers 429/503)` : ""}, temperature 0. All seed rules and facts are given as the retrieved context. The “Model” column shows which one answered.`);
     out();
-    out("| Case | Expected | AI findings (after validation) | Hit | Time |");
-    out("|---|---|---|---|---|");
+    out("| Case | Expected | AI findings (after validation) | Hit | Model | Time |");
+    out("|---|---|---|---|---|---|");
     let hits = 0;
     let expectedCount = 0;
     let cleanFp = 0;
@@ -221,7 +221,7 @@ async function main() {
       aiTimes.push(elapsed);
       if (res.status !== "completed") {
         failures++;
-        out(`| ${c.id} | ${c.expectAny.join(" or ") || "(clean)"} | ${res.status}: ${res.status === "failed" ? res.error : res.reason} | ❌ | ${ms(elapsed)} |`);
+        out(`| ${c.id} | ${c.expectAny.join(" or ") || "(clean)"} | ${res.status}: ${res.status === "failed" ? res.error : res.reason} | ❌ | — | ${ms(elapsed)} |`);
         continue;
       }
       for (const k of Object.keys(agg) as (keyof typeof agg)[]) agg[k] += res.stats[k];
@@ -235,7 +235,7 @@ async function main() {
         hit = res.findings.some((f) => c.expectAny.includes(f.ruleCode ?? "") || c.expectAny.includes(f.category));
         if (hit) hits++;
       }
-      out(`| ${c.id} | ${c.expectAny.join(" or ") || "(clean)"} | ${desc} | ${hit ? "✅" : "❌"} | ${ms(elapsed)} |`);
+      out(`| ${c.id} | ${c.expectAny.join(" or ") || "(clean)"} | ${desc} | ${hit ? "✅" : "❌"} | ${res.model} | ${ms(elapsed)} |`);
     }
     out();
     out("| Metric | Result |");

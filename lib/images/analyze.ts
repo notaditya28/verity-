@@ -36,7 +36,7 @@ export type VisionResult = z.infer<typeof visionSchema>;
 
 /** Gemini vision: OCR + description + text-block boxes. Output is zod-validated. Throws on failure. */
 export async function readImage(img: { mimeType: string; buffer: Buffer }): Promise<VisionResult> {
-  const raw = await generateJson({
+  const { data: raw } = await generateJson({
     system: VISION_SYSTEM,
     prompt: VISION_PROMPT,
     schema: VISION_RESPONSE_SCHEMA,

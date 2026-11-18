@@ -56,7 +56,7 @@ export async function runAiStage(args: {
       facts: retrieved.facts,
       alreadyFound: args.deterministic,
     });
-    const raw = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS });
+    const { data: raw, model: usedModel } = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS });
     const { findings, stats } = validateAiFindings(raw, {
       text: args.text,
       extractedText: args.extractedText,
@@ -68,7 +68,7 @@ export async function runAiStage(args: {
       status: "completed",
       findings,
       stats,
-      model,
+      model: usedModel,
       promptVersion: PROMPT_VERSION,
       retrieved: { rules: retrieved.rules.map((r) => r.code), facts: retrieved.facts.map((f) => f.code) },
     };
