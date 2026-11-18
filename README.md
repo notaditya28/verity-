@@ -82,8 +82,8 @@ npm run dev                  # http://localhost:3000
 | `DATABASE_URL` | Supabase **transaction pooler** URL (port 6543). Used by the app at runtime |
 | `DIRECT_DATABASE_URL` | Supabase **session pooler** URL (port 5432). Used by `db:push` and `seed` (optional, falls back to `DATABASE_URL`) |
 | `GEMINI_API_KEY` | Google AI Studio key. Server-side only |
-| `GEMINI_FALLBACK_MODEL` | Optional, e.g. `gemini-3.5-flash-lite`. Used once when the main model answers "busy" (429/503) |
-| `GEMINI_MODEL` | e.g. `gemini-3.5-flash` (`gemini-2.5-flash` is no longer available to new API keys) |
+| `GEMINI_FALLBACK_MODEL` | Optional, e.g. `gemini-3.1-flash-lite`. Used once when the main model answers "busy" (429/503) |
+| `GEMINI_MODEL` | e.g. `gemini-3.5-flash-lite` (`gemini-2.5-flash` is no longer available to new API keys) |
 
 ## Quality and safety
 - TypeScript strict. zod validates every API input and every LLM output.

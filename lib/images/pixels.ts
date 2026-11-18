@@ -1,7 +1,7 @@
 // Pixel analysis with sharp + node-vibrant. No network and no server-only import, so scripts can test it offline.
 import sharp from "sharp";
 import { Vibrant } from "node-vibrant/node";
-import { hexToRgb, rgbToHex, twoMeans, type Rgb } from "./color";
+import { hexToRgb, rgbToHex, textColours, type Rgb } from "./color";
 
 /** A text block as reported by the image reader: box is [ymin, xmin, ymax, xmax] normalised to 0–1000. */
 export interface TextBlockInput {
@@ -61,7 +61,7 @@ export async function measureTextBlocks(buffer: Buffer, blocks: TextBlockInput[]
             .toBuffer({ resolveWithObject: true });
           const px: Rgb[] = [];
           for (let i = 0; i + 2 < data.length; i += info.channels) px.push([data[i], data[i + 1], data[i + 2]]);
-          const res = twoMeans(px);
+          const res = textColours(px);
           // Need a real second cluster (the glyphs) for the measurement to mean anything.
           if (res && res.foregroundShare >= 0.03) measured = res;
         } catch {

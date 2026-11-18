@@ -55,6 +55,13 @@ async function main() {
   assert.ok(text.some((f) => f.ruleCode === "C-03" && f.factCode === "F-12"), "₹399 should contradict F-12");
   assert.ok(text.every((f) => f.spanStart === null), "image findings have no text span");
 
+  // A loose box around the whole "Shop now" button (as gemini-3.5-flash-lite returned it) includes orange corners;
+  // the text must still be measured as white on teal (passes), not a white/orange blend (false failure).
+  const [loose] = await measureTextBlocks(buf, [{ text: "Shop now", box: [696, 335, 807, 665], text_color: "#FFFFFF", background_color: "#0E7C7B" }]);
+  const looseRatio = contrastRatio(hexToRgb(loose.textHex), hexToRgb(loose.backgroundHex));
+  console.log(`  loose Shop now box: ${loose.textHex} on ${loose.backgroundHex} → ${looseRatio.toFixed(2)}:1`);
+  assert.ok(looseRatio >= 4.5, `loose button box should still pass, got ${looseRatio.toFixed(2)}`);
+
   // Alt text: good alt passes, generic alt fails.
   const a01 = ctx.rules.find((r) => r.code === "A-01")!;
   assert.equal(checkAltText(a01, { altText: "Orange banner announcing the festive sale of Lumina Vitamin C Serum", description: null, colours: [], blocks: [] }).length, 0);

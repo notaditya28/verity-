@@ -95,27 +95,42 @@ export function deltaE2000(rgb1: Rgb, rgb2: Rgb): number {
   return Math.sqrt((dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh));
 }
 
+const d2 = (p: Rgb, q: Rgb) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+
 /**
- * Splits pixels into two colour clusters (k-means, k = 2, seeded with the darkest and lightest pixel).
- * In a tight crop around text the larger cluster is the background and the smaller one is the text.
+ * Finds the text and background colours in a crop around a text block.
+ * k-means with k = 3 (seeded with the darkest pixel, the lightest pixel and the pixel furthest from both):
+ * the largest cluster is the background; of the other clusters covering ≥ 3% of the crop, the text is the one with
+ * the highest contrast against the background. A third cluster absorbs anti-aliasing or shapes that a loose box
+ * catches (e.g. the corners of a button), so they don't get blended into the text colour.
  */
-export function twoMeans(pixels: Rgb[], iterations = 8): { background: Rgb; foreground: Rgb; foregroundShare: number } | null {
-  if (pixels.length < 4) return null;
+export function textColours(pixels: Rgb[], iterations = 10): { background: Rgb; foreground: Rgb; foregroundShare: number } | null {
+  if (pixels.length < 6) return null;
   let dark = pixels[0];
   let light = pixels[0];
   for (const p of pixels) {
     if (luminance(p) < luminance(dark)) dark = p;
     if (luminance(p) > luminance(light)) light = p;
   }
-  let c: [Rgb, Rgb] = [dark, light];
+  let third = pixels[0];
+  let best = -1;
+  for (const p of pixels) {
+    const d = Math.min(d2(p, dark), d2(p, light));
+    if (d > best) {
+      best = d;
+      third = p;
+    }
+  }
+  const K = 3;
+  let c: Rgb[] = [dark, light, third];
   let assign = new Array<number>(pixels.length).fill(0);
-  const d2 = (p: Rgb, q: Rgb) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
   for (let it = 0; it < iterations; it++) {
-    assign = pixels.map((p) => (d2(p, c[0]) <= d2(p, c[1]) ? 0 : 1));
-    const sums: [number[], number[]] = [
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
-    ];
+    assign = pixels.map((p) => {
+      let k = 0;
+      for (let j = 1; j < K; j++) if (d2(p, c[j]) < d2(p, c[k])) k = j;
+      return k;
+    });
+    const sums = Array.from({ length: K }, () => [0, 0, 0, 0]);
     pixels.forEach((p, i) => {
       const s = sums[assign[i]];
       s[0] += p[0];
@@ -123,17 +138,20 @@ export function twoMeans(pixels: Rgb[], iterations = 8): { background: Rgb; fore
       s[2] += p[2];
       s[3]++;
     });
-    c = [0, 1].map((k) => (sums[k][3] ? ([sums[k][0] / sums[k][3], sums[k][1] / sums[k][3], sums[k][2] / sums[k][3]] as Rgb) : c[k])) as [Rgb, Rgb];
+    c = c.map((old, k) => (sums[k][3] ? ([sums[k][0] / sums[k][3], sums[k][1] / sums[k][3], sums[k][2] / sums[k][3]] as Rgb) : old));
   }
-  const n1 = assign.filter((a) => a === 1).length;
-  const n0 = pixels.length - n1;
-  if (n0 === 0 || n1 === 0) return null;
-  const bgIdx = n0 >= n1 ? 0 : 1;
+  const counts = c.map((_, k) => assign.filter((a) => a === k).length);
+  const bgIdx = counts.indexOf(Math.max(...counts));
   const bg = c[bgIdx];
+  const candidates = c
+    .map((col, k) => ({ k, col, share: counts[k] / pixels.length }))
+    .filter((x) => x.k !== bgIdx && x.share >= 0.03);
+  if (!candidates.length) return null;
+  const text = candidates.sort((x, y) => contrastRatio(y.col, bg) - contrastRatio(x.col, bg))[0];
   // Anti-aliased glyph edges pull the text centroid towards the background, so use the half of the text pixels
   // furthest from the background (the solid glyph cores). This avoids understating the contrast.
-  const fgPixels = pixels.filter((_, i) => assign[i] !== bgIdx).sort((p, q) => d2(q, bg) - d2(p, bg));
+  const fgPixels = pixels.filter((_, i) => assign[i] === text.k).sort((p, q) => d2(q, bg) - d2(p, bg));
   const core = fgPixels.slice(0, Math.max(1, Math.ceil(fgPixels.length / 2)));
   const fg = core.reduce<Rgb>((s, p) => [s[0] + p[0] / core.length, s[1] + p[1] / core.length, s[2] + p[2] / core.length], [0, 0, 0]);
-  return { background: bg, foreground: fg, foregroundShare: Math.min(n0, n1) / pixels.length };
+  return { background: bg, foreground: fg, foregroundShare: text.share };
 }
