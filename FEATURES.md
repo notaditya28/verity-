@@ -76,6 +76,12 @@
 - ROUND3.md: how Fact Drift Alerts, guideline-gap insights and confidential mode build on the current schema
 - DISCLOSURES and CHANGES_FROM_PLAN are final
 
+### Final polish (live-tested on Vercel)
+- Page loading skeleton, a friendly error page with "Try again", and a 404 page
+- Gemini model set to `gemini-3.5-flash`, with readable AI error messages, a 20 s vision limit and one quick retry on 429/503
+- "Reset demo" works after checks have run (it deletes submissions before rebuilding the brand data)
+- Re-checking is only possible while a submission is with the creator, so approved results can't change
+
 ## Not built (by design)
 - Logo detection (last item on the cut list)
 - Real authentication and multi-org support (the brief asks for a pre-seeded demo org and a role switcher)
