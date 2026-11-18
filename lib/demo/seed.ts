@@ -11,6 +11,9 @@ export async function seedDemo(db: DB) {
   await db.execute(sql`create extension if not exists pg_trgm`);
 
   await db.transaction(async (tx) => {
+    // Submissions first (cascades to versions → checks → findings): checks reference policy_versions, so deleting
+    // the org first would remove policy versions that checks still point to.
+    await tx.delete(schema.submissions).where(sql`${schema.submissions.orgId} = ${DEMO_ORG_ID}`);
     await tx.delete(schema.organizations).where(sql`${schema.organizations.id} = ${DEMO_ORG_ID}`);
     await tx.insert(schema.organizations).values({ id: DEMO_ORG_ID, name: DEMO_ORG_NAME });
 
