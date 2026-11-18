@@ -52,7 +52,10 @@ async function main() {
   const contrast = image.filter((f) => f.ruleCode === "A-02");
   assert.ok(contrast.some((f) => f.quote === "Festive Glow Sale"), "yellow on orange should fail contrast");
   assert.ok(!contrast.some((f) => f.quote === "Shop now"), "white on teal should pass contrast");
-  assert.ok(text.some((f) => f.ruleCode === "C-03" && f.factCode === "F-12"), "₹399 should contradict F-12");
+  assert.ok(
+    text.some((f) => f.ruleCode === "C-03" && f.factCode === "F-12" && f.label === "contradicted"),
+    "₹399 on the line below the product name should contradict F-12",
+  );
   assert.ok(text.every((f) => f.spanStart === null), "image findings have no text span");
 
   // A loose box around the whole "Shop now" button (as gemini-3.5-flash-lite returned it) includes orange corners;

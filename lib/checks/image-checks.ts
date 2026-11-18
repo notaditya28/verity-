@@ -123,7 +123,10 @@ const BODY_ONLY_RULES = new Set(["ASCI-01", "A-03"]);
 
 export function imageTextFindings(extractedText: string, channel: Channel, ctx: CheckContext): DraftFinding[] {
   if (!extractedText.trim()) return [];
-  return runDeterministicChecks({ text: extractedText, channel }, ctx)
+  // Line breaks in an image are layout, not sentence ends: "Lumina Vitamin C Serum" / "now just ₹399" is one
+  // message. Joining lines lets a price match the product named on the line above. Same length, so quotes match.
+  const asText = extractedText.replace(/\n/g, " ");
+  return runDeterministicChecks({ text: asText, channel }, ctx)
     .filter((f) => !f.ruleCode || !BODY_ONLY_RULES.has(f.ruleCode))
     .map((f) => {
       const q = f.quote ?? "";
