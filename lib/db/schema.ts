@@ -76,6 +76,8 @@ export const rules = pgTable(
     checkType: checkType("check_type").notNull(),
     params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
     active: boolean("active").notNull().default(true),
+    // Round 3: rules are versioned like facts. An accepted clarification inserts a new row; the old one stays.
+    current: boolean("current").notNull().default(true),
     policyVersionId: uuid("policy_version_id").notNull().references(() => policyVersions.id),
   },
   (t) => [index("rules_org_code_idx").on(t.orgId, t.code)],

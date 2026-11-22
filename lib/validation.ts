@@ -76,3 +76,40 @@ export const sensitiveTermSchema = z.object({
   term: z.string().trim().min(2, "Enter at least 2 characters").max(80),
   note: z.string().trim().max(200).optional(),
 });
+
+export const clarifyRequestSchema = z.object({
+  kind: z.enum(["unclear_rule", "uncovered_topic", "missing_fact"]),
+  key: z.string().trim().min(1).max(200),
+});
+
+export const clarifySuggestionSchema = z.object({
+  kind: z.enum(["revise_rule", "new_rule", "new_fact"]),
+  title: z.string().trim().min(3).max(120),
+  description: z.string().trim().min(10).max(600),
+  rationale: z.string().trim().max(600).default(""),
+  fact_subject: z.string().trim().max(120).default(""),
+  fact_attribute: z.string().trim().max(120).default(""),
+});
+
+export const ruleUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  description: z.string().trim().min(10).max(600),
+  note: z.string().trim().max(200).optional(),
+});
+
+export const ruleCreateSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  description: z.string().trim().min(10).max(600),
+  category: z.enum(["tone", "terminology", "claims", "accessibility", "visual", "asci", "messaging"]).default("claims"),
+  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+});
+
+export const factCreateSchema = z.object({
+  subject: z.string().trim().min(2).max(120),
+  attribute: z.string().trim().min(2).max(120),
+  value: z.string().trim().min(1, "Enter the approved value").max(200),
+  unit: z.string().trim().max(40).optional(),
+  owner: z.string().trim().min(2, "Who owns this fact?").max(80),
+  sourceDoc: z.string().trim().min(2, "Name the source document").max(160),
+  validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").nullable().optional(),
+});

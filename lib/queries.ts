@@ -6,7 +6,7 @@ import { DEMO_ORG_ID } from "./demo/constants";
 export async function getBrandData() {
   const db = getDb();
   const [rules, facts, assets, versions] = await Promise.all([
-    db.select().from(schema.rules).where(eq(schema.rules.orgId, DEMO_ORG_ID)).orderBy(asc(schema.rules.code)),
+    db.select().from(schema.rules).where(eq(schema.rules.orgId, DEMO_ORG_ID)).orderBy(asc(schema.rules.code), desc(schema.rules.current)),
     db
       .select()
       .from(schema.facts)
@@ -20,7 +20,10 @@ export async function getBrandData() {
       .orderBy(desc(schema.policyVersions.versionNumber)),
   ]);
   const versionById = new Map(versions.map((v) => [v.id, v.versionNumber]));
-  return { rules, facts, asset: assets[0] ?? null, versions, versionById };
+  // Rules are versioned: list the current row of each code, keep older rows as that rule's history.
+  const ruleHistory = new Map<string, typeof rules>();
+  for (const r of rules) ruleHistory.set(r.code, [...(ruleHistory.get(r.code) ?? []), r]);
+  return { rules: rules.filter((r) => r.current), ruleHistory, facts, asset: assets[0] ?? null, versions, versionById };
 }
 
 export async function getSubmissionDetail(id: string) {
@@ -49,7 +52,7 @@ export async function getSubmissionDetail(id: string) {
     ? await db.select().from(schema.findings).where(eq(schema.findings.checkId, check.id)).orderBy(asc(schema.findings.spanStart))
     : [];
   const [rules, facts, decisions] = await Promise.all([
-    db.select().from(schema.rules).where(eq(schema.rules.orgId, DEMO_ORG_ID)),
+    db.select().from(schema.rules).where(eq(schema.rules.orgId, DEMO_ORG_ID)).orderBy(asc(schema.rules.current)),
     db.select().from(schema.facts).where(eq(schema.facts.orgId, DEMO_ORG_ID)),
     db.select().from(schema.decisions).where(eq(schema.decisions.submissionId, id)).orderBy(desc(schema.decisions.createdAt)),
   ]);

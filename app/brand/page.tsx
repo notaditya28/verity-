@@ -6,6 +6,8 @@ import { getRole } from "@/lib/role";
 import { FactEditor } from "./fact-editor";
 import { TryDrift } from "./try-drift";
 import { SensitiveTerms } from "./sensitive-terms";
+import Link from "next/link";
+import { loadInsightFindings } from "@/lib/insights/queries";
 import { factHistory } from "@/lib/drift/queries";
 import { displayValue } from "@/lib/drift/match";
 import { getDb, schema } from "@/lib/db";
@@ -36,14 +38,24 @@ export default async function BrandPage() {
   let data: Awaited<ReturnType<typeof getBrandData>>;
   let history: Awaited<ReturnType<typeof factHistory>>;
   let terms: Awaited<ReturnType<typeof activeSensitiveTerms>>;
+  let insightRows: Awaited<ReturnType<typeof loadInsightFindings>>;
   const isManager = (await getRole()) === "manager";
   try {
-    [data, history, terms] = await Promise.all([getBrandData(), factHistory(), activeSensitiveTerms()]);
+    [data, history, terms, insightRows] = await Promise.all([getBrandData(), factHistory(), activeSensitiveTerms(), loadInsightFindings().catch(() => [])]);
   } catch (err) {
     console.error(err);
     return <DbError what="brand guidelines" />;
   }
-  const { rules, facts, asset, versions, versionById } = data;
+  const { rules, ruleHistory, facts, asset, versions, versionById } = data;
+  // Per-rule dispute counts (same deduplicated rows as /insights) for the hint on each rule card.
+  const ruleStats = new Map<string, { findings: number; disputes: number }>();
+  for (const f of insightRows) {
+    if (!f.ruleCode) continue;
+    const e = ruleStats.get(f.ruleCode) ?? { findings: 0, disputes: 0 };
+    e.findings++;
+    if (f.decision === "disputed") e.disputes++;
+    ruleStats.set(f.ruleCode, e);
+  }
   if (rules.length === 0) {
     return <DbError what="brand guidelines (no rules found)" />;
   }
@@ -177,8 +189,27 @@ export default async function BrandPage() {
                     </div>
                     <CardTitle className="text-base">{r.title}</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-2">
                     <CardDescription>{r.description}</CardDescription>
+                    {(ruleStats.get(r.code)?.disputes ?? 0) >= 2 && (
+                      <p className="text-xs text-orange-800">
+                        Disputed in {ruleStats.get(r.code)!.disputes} of {ruleStats.get(r.code)!.findings} findings —{" "}
+                        <Link href={`/insights#gap-${r.code}`} className="font-medium underline-offset-4 hover:underline">view insight</Link>
+                      </p>
+                    )}
+                    {(ruleHistory.get(r.code)?.length ?? 0) > 1 && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-primary">History ({ruleHistory.get(r.code)!.length} versions)</summary>
+                        <ul className="mt-1 space-y-1 text-muted-foreground">
+                          {ruleHistory.get(r.code)!.map((h) => (
+                            <li key={h.id}>
+                              v{versionById.get(h.policyVersionId) ?? "?"}
+                              {h.current ? " (current)" : ""}: {h.current ? h.description : <del>{h.description}</del>}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </CardContent>
                 </Card>
               ))}

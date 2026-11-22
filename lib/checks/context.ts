@@ -8,7 +8,7 @@ export async function loadPolicy(orgId: string) {
   const db = getDb();
   const [[org], rules, terms, facts, assets, [pv]] = await Promise.all([
     db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).limit(1),
-    db.select().from(schema.rules).where(and(eq(schema.rules.orgId, orgId), eq(schema.rules.active, true))),
+    db.select().from(schema.rules).where(and(eq(schema.rules.orgId, orgId), eq(schema.rules.active, true), eq(schema.rules.current, true))),
     db.select().from(schema.terms).where(eq(schema.terms.orgId, orgId)),
     db.select().from(schema.facts).where(and(eq(schema.facts.orgId, orgId), eq(schema.facts.current, true))),
     db.select().from(schema.brandAssets).where(eq(schema.brandAssets.orgId, orgId)).limit(1),

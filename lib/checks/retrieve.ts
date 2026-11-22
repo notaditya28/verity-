@@ -52,7 +52,7 @@ export const pgTextRetriever: Retriever = {
         const [ruleRows, factRows] = await Promise.all([
           db.execute<{ code: string; score: number }>(sql`
             select code, (${tsRule} + word_similarity(${s}, title || ' ' || description)) as score
-            from rules where org_id = ${orgId} and active
+            from rules where org_id = ${orgId} and active and current
             order by score desc limit ${TOP_K}`),
           db.execute<{ code: string; score: number }>(sql`
             select code, (${tsFact} + word_similarity(${s}, subject || ' ' || attribute || ' ' || value)) as score

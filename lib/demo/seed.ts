@@ -4,7 +4,7 @@ import * as schema from "../db/schema";
 import { DEMO_ORG_ID, DEMO_ORG_NAME } from "./constants";
 import { runDeterministicChecksWithUsages } from "../checks/deterministic";
 import type { CheckContext } from "../checks/types";
-import { SEED_APPROVED_POSTS, SEED_FACTS, SEED_FONTS, SEED_PALETTE, SEED_PRIVACY_DRAFTS, SEED_RULES, SEED_SENSITIVE_TERMS, SEED_TERMS } from "./seed-data";
+import { SEED_APPROVED_POSTS, SEED_FACTS, SEED_FONTS, SEED_PALETTE, SEED_HISTORY, SEED_PRIVACY_DRAFTS, SEED_RULES, SEED_SENSITIVE_TERMS, SEED_TERMS } from "./seed-data";
 
 type DB = PostgresJsDatabase<typeof schema>;
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -74,7 +74,115 @@ export async function seedDemo(db: DB) {
 
     await tx.insert(schema.sensitiveTerms).values(SEED_SENSITIVE_TERMS.map((t) => ({ orgId: DEMO_ORG_ID, ...t })));
     await seedPrivacyDrafts(tx, pv.id, ctx);
+    await seedHistory(tx, pv.id, ctx);
   });
+}
+
+/** Fictional review history for /insights: real rule findings, scripted AI findings, creator and manager decisions. */
+async function seedHistory(tx: Tx, policyVersionId: string, ctx: CheckContext) {
+  for (const p of SEED_HISTORY) {
+    const t0 = daysAgo(p.daysAgo);
+    const [sub] = await tx
+      .insert(schema.submissions)
+      .values({
+        orgId: DEMO_ORG_ID,
+        title: p.title,
+        channel: p.channel,
+        goal: "Demo history (fictional)",
+        audience: "Demo history (fictional)",
+        cta: "",
+        status: p.outcome,
+        demoHistory: true,
+        currentVersion: p.fixedText ? 2 : 1,
+        createdAt: t0,
+        updatedAt: daysAgo(p.daysAgo, 5),
+      })
+      .returning();
+    const audits: (typeof schema.auditLog.$inferInsert)[] = [
+      { orgId: DEMO_ORG_ID, actorRole: "creator", action: "submission.created", entity: "submission", entityId: sub.id, details: { title: p.title, channel: p.channel, demoHistory: true }, createdAt: t0 },
+    ];
+
+    const versions = p.fixedText ? [p.text, p.fixedText] : [p.text];
+    for (let i = 0; i < versions.length; i++) {
+      const text = versions[i];
+      const at = daysAgo(p.daysAgo, i * 2);
+      const [ver] = await tx.insert(schema.submissionVersions).values({ submissionId: sub.id, versionNumber: i + 1, text, createdAt: at }).returning();
+      const { findings, usages } = runDeterministicChecksWithUsages({ text, channel: p.channel }, ctx);
+      const ai = i === 0 ? (p.aiFindings ?? []) : [];
+      const uncited = ai.filter((a) => !a.ruleCode).length;
+      const [check] = await tx
+        .insert(schema.checks)
+        .values({
+          submissionVersionId: ver.id,
+          policyVersionId,
+          status: "completed",
+          aiStatus: "completed",
+          model: "demo history (fictional)",
+          promptVersion: "judge-v2",
+          startedAt: at,
+          finishedAt: at,
+        })
+        .returning();
+      const rows = [
+        ...findings.map((f) => {
+          const reason = p.disputes?.[f.ruleCode ?? ""];
+          const decision = reason ? ("disputed" as const) : p.fixedText && i === 0 ? ("accepted" as const) : ("pending" as const);
+          return { ...f, checkId: check.id, creatorDecision: decision, disputeReason: reason ?? null };
+        }),
+        ...ai.map((a) => {
+          const start = text.indexOf(a.quote);
+          return {
+            checkId: check.id,
+            ruleCode: a.ruleCode,
+            factCode: null,
+            source: "ai" as const,
+            category: a.category,
+            severity: a.severity,
+            label: a.label,
+            spanStart: start >= 0 ? start : null,
+            spanEnd: start >= 0 ? start + a.quote.length : null,
+            quote: a.quote,
+            explanation: a.explanation,
+            evidence: null,
+            suggestedFix: null,
+            confidence: a.confidence,
+            creatorDecision: a.disputeReason ? ("disputed" as const) : ("pending" as const),
+            disputeReason: a.disputeReason ?? null,
+          };
+        }),
+      ];
+      if (rows.length) await tx.insert(schema.findings).values(rows);
+      if (usages.length) {
+        await tx.insert(schema.factUsages).values(
+          usages.map((u) => ({ orgId: DEMO_ORG_ID, checkId: check.id, submissionId: sub.id, submissionVersionId: ver.id, ...u, source: "rule" as const, createdAt: at })),
+        );
+      }
+      audits.push({
+        orgId: DEMO_ORG_ID,
+        actorRole: "system",
+        action: "check.completed",
+        entity: "submission",
+        entityId: sub.id,
+        details: {
+          version: i + 1,
+          checkId: check.id,
+          ruleFindings: findings.length,
+          ai: { provider: "demo history (fictional)", findings: ai.length, validation: { received: ai.length, kept: ai.length, downgradedCitation: uncited, downgradedConfidence: 0 } },
+          demoHistory: true,
+        },
+        createdAt: at,
+      });
+    }
+
+    const submittedAt = daysAgo(p.daysAgo, 3);
+    audits.push({ orgId: DEMO_ORG_ID, actorRole: "creator", action: "submission.submitted", entity: "submission", entityId: sub.id, details: { demoHistory: true }, createdAt: submittedAt });
+    if (p.outcome !== "in_review") {
+      const action = p.outcome === "approved" ? ("approve" as const) : ("request_changes" as const);
+      await tx.insert(schema.decisions).values({ submissionId: sub.id, role: "manager", action, comment: p.managerComment ?? null, createdAt: daysAgo(p.daysAgo, 5) });
+      audits.push({ orgId: DEMO_ORG_ID, actorRole: "manager", action: `submission.${action}`, entity: "submission", entityId: sub.id, details: { comment: p.managerComment ?? null, demoHistory: true }, createdAt: daysAgo(p.daysAgo, 5) });
+    }
+    await tx.insert(schema.auditLog).values(audits);
+  }
 }
 
 /**

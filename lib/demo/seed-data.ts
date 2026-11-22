@@ -479,3 +479,74 @@ export const SEED_PRIVACY_DRAFTS = [
     confidential: false,
   },
 ];
+
+/**
+ * Round 3: fictional review history for /insights (labelled "Demo history (fictional)"). Rule findings are produced by
+ * the real rule engine at seed time; only the AI findings below are scripted. Planted signals: T-02 disputed on
+ * festival greetings with managers approving anyway; vegan / cruelty-free claims no rule or fact covers; a repeated
+ * "dark spots by 30%" claim with no fact.
+ */
+export interface SeedHistoryAiFinding {
+  label: "unsupported" | "needs_human_verification";
+  category: "claims" | "tone" | "messaging";
+  ruleCode: string | null;
+  quote: string;
+  explanation: string;
+  severity: "low" | "medium" | "high";
+  confidence: number;
+  disputeReason?: string;
+}
+
+export interface SeedHistoryPost {
+  title: string;
+  channel: "instagram" | "ad" | "email" | "document" | "other";
+  text: string;
+  /** When set, v1 had accepted fixes and v2 (this text) passed. */
+  fixedText?: string;
+  daysAgo: number;
+  disputes?: Record<string, string>;
+  aiFindings?: SeedHistoryAiFinding[];
+  outcome: "approved" | "changes_requested" | "in_review";
+  managerComment?: string;
+}
+
+const UNCOVERED = (quote: string): SeedHistoryAiFinding => ({
+  label: "needs_human_verification",
+  category: "claims",
+  ruleCode: null,
+  quote,
+  explanation: `“${quote}” is a product claim, but no rule or fact in the brand policy covers it, so it can't be confirmed.`,
+  severity: "medium",
+  confidence: 0.55,
+});
+const DARK_SPOTS = (quote: string): SeedHistoryAiFinding => ({
+  label: "unsupported",
+  category: "claims",
+  ruleCode: "C-03",
+  quote,
+  explanation: `“${quote}” states a measured result, but no fact in the Fact Registry backs it.`,
+  severity: "high",
+  confidence: 0.8,
+});
+
+export const SEED_HISTORY: SeedHistoryPost[] = [
+  // Planted ambiguous rule: T-02 on festival greetings
+  { title: "Diwali greeting post", channel: "instagram", text: "#collab Happy Diwali!! Light up your routine with the Lumina Vitamin C Serum.", daysAgo: 14, disputes: { "T-02": "It's a festival greeting, not hype. Every brand says Happy Diwali!!" }, outcome: "approved" },
+  { title: "Holi offer banner", channel: "ad", text: "Happy Holi!! Wash off the colours gently and treat your skin kindly.", daysAgo: 12, disputes: { "T-02": "Holi greeting. The double exclamation is part of the greeting." }, outcome: "approved" },
+  { title: "Eid wishes post", channel: "instagram", text: "#collab Eid Mubarak!! Wishing you a calm and glowing celebration.", daysAgo: 11, disputes: { "T-02": "Greeting for Eid, not a sales claim." }, outcome: "approved" },
+  { title: "Christmas gifting email", channel: "email", text: "Merry Christmas!! Gift the Lumina Niacinamide Night Cream to someone you love.", daysAgo: 9, disputes: { "T-02": "Seasonal greeting; the rule seems meant for hype words." }, outcome: "approved" },
+  { title: "New Year post", channel: "instagram", text: "#collab Happy New Year!! New year, same gentle routine.", daysAgo: 7, disputes: { "T-02": "New Year greeting." }, outcome: "changes_requested", managerComment: "Keep it to one exclamation mark, even for greetings." },
+  // Planted uncovered topic: vegan / cruelty-free
+  { title: "Vegan serum launch post", channel: "instagram", text: "#collab Our serum is vegan and cruelty-free, made for sensitive skin.", daysAgo: 10, aiFindings: [UNCOVERED("vegan and cruelty-free")], outcome: "in_review" },
+  { title: "Cruelty-free promise banner", channel: "ad", text: "Proudly cruelty-free and never tested on animals. Shop now.", daysAgo: 8, aiFindings: [UNCOVERED("Proudly cruelty-free and never tested on animals")], outcome: "approved" },
+  { title: "Plant-based email", channel: "email", text: "Our vegan formula uses plant-based actives you can trust.", daysAgo: 6, aiFindings: [UNCOVERED("Our vegan formula uses plant-based actives")], outcome: "in_review" },
+  // Missing fact: repeated "dark spots by 30%" claims
+  { title: "Dark-spot results post", channel: "instagram", text: "#collab The Lumina Vitamin C Serum reduces dark spots by 30% with regular use.", daysAgo: 13, aiFindings: [DARK_SPOTS("reduces dark spots by 30%")], outcome: "changes_requested", managerComment: "We have no study for 30%. Remove the number." },
+  { title: "Brightening ad", channel: "ad", text: "Fades dark spots by 30% for brighter-looking skin.", daysAgo: 5, aiFindings: [DARK_SPOTS("Fades dark spots by 30%")], outcome: "in_review" },
+  { title: "Results email", channel: "email", text: "Customers saw it reduce dark spots by 30%. Try it today.", daysAgo: 4, aiFindings: [{ ...DARK_SPOTS("reduce dark spots by 30%"), disputeReason: "Customer survey result, not a lab claim." }], outcome: "in_review" },
+  // Ordinary history: fixed then approved, and clean posts
+  { title: "Flash sale post", channel: "instagram", text: "#collab OMG!! The best serum in India. Shop the link in bio.", fixedText: "#collab The much-loved serum. Shop the link in bio.", daysAgo: 15, outcome: "approved" },
+  { title: "Sunscreen guarantee ad", channel: "ad", text: "Guaranteed protection all day with the Lumina Sunscreen SPF 50.", fixedText: "Lasting protection all day with the Lumina Sunscreen SPF 50.", daysAgo: 13, outcome: "approved" },
+  { title: "Night cream care post", channel: "instagram", text: "#collab Meet the Lumina Niacinamide Night Cream: smoother-looking skin with regular use.", daysAgo: 10, outcome: "approved" },
+  { title: "Routine tips email", channel: "email", text: "Cleanse, apply the Lumina Vitamin C Serum, then sunscreen. Simple steps for brighter-looking skin.", daysAgo: 3, outcome: "approved" },
+];
