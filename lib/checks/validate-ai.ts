@@ -1,7 +1,7 @@
 // Validates raw LLM output and enforces "no source, no hard flag". Pure: unit-testable without the network.
 import { z } from "zod";
 import { factEvidence, ruleEvidence } from "./format";
-import type { DraftFinding, EngineFact, EngineRule, Severity } from "./types";
+import type { DraftFinding, DraftUsage, EngineFact, EngineRule, Severity } from "./types";
 
 const aiFindingSchema = z.object({
   category: z.enum(["tone", "messaging", "claims"]),
@@ -40,7 +40,7 @@ export function validateAiFindings(
     retrievedFacts: EngineFact[];
     deterministic: DraftFinding[];
   },
-): { findings: DraftFinding[]; stats: ValidationStats } {
+): { findings: DraftFinding[]; stats: ValidationStats; usages: DraftUsage[] } {
   const stats: ValidationStats = {
     received: 0,
     kept: 0,
@@ -58,6 +58,8 @@ export function validateAiFindings(
   const rules = new Map(args.retrievedRules.map((r) => [r.code, r]));
   const facts = new Map(args.retrievedFacts.map((f) => [f.code, f]));
   const out: DraftFinding[] = [];
+  // "Supported" claims aren't shown, but they prove the content relies on a fact (for Fact Drift).
+  const usages: DraftUsage[] = [];
 
   for (const item of top.data.findings) {
     const p = aiFindingSchema.safeParse(item);
@@ -68,6 +70,13 @@ export function validateAiFindings(
     const a = p.data;
     if (a.label === "supported") {
       stats.droppedSupported++;
+      const fact = a.fact_code?.trim() ? facts.get(a.fact_code.trim()) : undefined;
+      const q = a.quote;
+      if (fact && q.trim()) {
+        const at = args.text.indexOf(q);
+        if (at >= 0) usages.push({ factCode: fact.code, factId: fact.id ?? null, matchedText: q, spanStart: at, spanEnd: at + q.length });
+        else if (args.extractedText?.includes(q)) usages.push({ factCode: fact.code, factId: fact.id ?? null, matchedText: q, spanStart: null, spanEnd: null });
+      }
       continue;
     }
 
@@ -154,5 +163,5 @@ export function validateAiFindings(
     else dedup.push(f);
   }
   stats.kept = dedup.length;
-  return { findings: dedup, stats };
+  return { findings: dedup, stats, usages };
 }

@@ -130,6 +130,8 @@ export const submissions = pgTable("submissions", {
   status: submissionStatus("status").notNull().default("draft"),
   createdByRole: role("created_by_role").notNull().default("creator"),
   currentVersion: integer("current_version").notNull().default(1),
+  // Round 3: seeded, fictional history (shown as "Demo history (fictional)").
+  demoHistory: boolean("demo_history").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -216,6 +218,69 @@ export const auditLog = pgTable(
   },
   (t) => [index("audit_org_created_idx").on(t.orgId, t.createdAt)],
 );
+
+// ---------- Round 3: Fact Drift ----------
+export const factUsageSource = pgEnum("fact_usage_source", ["rule", "ai", "image_text"]);
+export const driftReason = pgEnum("drift_reason", ["changed", "expired"]);
+export const driftDetection = pgEnum("drift_detection", ["usage", "scan"]);
+export const driftStatus = pgEnum("drift_status", ["open", "sent_back", "dismissed", "resolved"]);
+
+/**
+ * Every place a check saw content rely on a fact — correct or not. Findings only exist for mismatches, so without
+ * this a post that correctly says "₹449" would leave no trace, and drift couldn't find it when F-12 changes.
+ */
+export const factUsages = pgTable(
+  "fact_usages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    checkId: uuid("check_id").notNull().references(() => checks.id, { onDelete: "cascade" }),
+    submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
+    submissionVersionId: uuid("submission_version_id")
+      .notNull()
+      .references(() => submissionVersions.id, { onDelete: "cascade" }),
+    factCode: text("fact_code").notNull(),
+    // The exact fact row (version) the content was compared with.
+    factId: uuid("fact_id").references(() => facts.id, { onDelete: "cascade" }),
+    matchedText: text("matched_text").notNull(),
+    spanStart: integer("span_start"),
+    spanEnd: integer("span_end"),
+    source: factUsageSource("source").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("fact_usages_org_fact_idx").on(t.orgId, t.factId), index("fact_usages_version_idx").on(t.submissionVersionId)],
+);
+
+export const driftAlerts = pgTable(
+  "drift_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    factCode: text("fact_code").notNull(),
+    oldFactId: uuid("old_fact_id")
+      .notNull()
+      .references(() => facts.id, { onDelete: "cascade" }),
+    newFactId: uuid("new_fact_id").references(() => facts.id, { onDelete: "cascade" }), // null when the fact expired
+    reason: driftReason("reason").notNull(),
+    submissionId: uuid("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
+    submissionVersionId: uuid("submission_version_id")
+      .notNull()
+      .references(() => submissionVersions.id, { onDelete: "cascade" }),
+    matchedText: text("matched_text").notNull(),
+    detection: driftDetection("detection").notNull(),
+    status: driftStatus("status").notNull().default("open"),
+    resolutionNote: text("resolution_note"),
+    createdAt: createdAt(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("drift_alerts_old_fact_submission_unique").on(t.oldFactId, t.submissionId),
+    index("drift_alerts_org_status_idx").on(t.orgId, t.status),
+  ],
+);
+
+export type FactUsage = typeof factUsages.$inferSelect;
+export type DriftAlert = typeof driftAlerts.$inferSelect;
 
 export type Rule = typeof rules.$inferSelect;
 export type Fact = typeof facts.$inferSelect;

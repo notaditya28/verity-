@@ -353,6 +353,18 @@ export const SEED_FACTS: SeedFact[] = [
     validUntil: "2027-01-31",
   },
   {
+    // Round 3 demo: a time-limited offer that expires during the final-round window, to show expiry drift.
+    code: "F-32",
+    subject: "Festive sale on Lumina Niacinamide Night Cream",
+    attribute: "festive discount",
+    value: "15",
+    unit: "%",
+    owner: "Growth",
+    sourceDoc: "Festive offer brief OB-2611",
+    validFrom: "2026-11-14",
+    validUntil: "2026-11-23",
+  },
+  {
     code: "F-40",
     subject: "Lumina Vitamin C Serum",
     attribute: "best-seller status on luminaskin website",
@@ -384,3 +396,56 @@ export const SEED_PALETTE = [
 ];
 
 export const SEED_FONTS = ["Poppins", "Inter"];
+
+/**
+ * Round 3: fictional, already-approved posts (with full history) that correctly quote facts. They are the content that
+ * Fact Drift finds when a fact changes or expires. Labelled "Demo history (fictional)" in the UI.
+ */
+export interface SeedApprovedPost {
+  title: string;
+  channel: "instagram" | "ad" | "email" | "document" | "other";
+  goal: string;
+  audience: string;
+  cta: string;
+  text: string;
+  daysAgo: number;
+}
+
+export const SEED_APPROVED_POSTS: SeedApprovedPost[] = [
+  {
+    title: "Vitamin C Serum price post (approved)",
+    channel: "instagram",
+    goal: "Drive sales of the Vitamin C Serum",
+    audience: "Skincare-curious adults 22–40",
+    cta: "Tap the link in bio",
+    text: "#collab Our Lumina Vitamin C Serum is now ₹449 for 30ml. It has 10% vitamin C and is dermatologically tested. Tap the link in bio.",
+    daysAgo: 6,
+  },
+  {
+    title: "Free-shipping banner (approved)",
+    channel: "ad",
+    goal: "Lift average order value",
+    audience: "Returning customers",
+    cta: "Shop now",
+    text: "Free shipping on orders above ₹499. Stock up on the Lumina Sunscreen SPF 50 and shop now.",
+    daysAgo: 5,
+  },
+  {
+    title: "Delivery FAQ email (approved)",
+    channel: "email",
+    goal: "Answer delivery questions before checkout",
+    audience: "First-time buyers",
+    cta: "Reply with any question",
+    text: "Standard delivery takes 3–5 business days anywhere in India. Questions? Reply to this email and our team will help.",
+    daysAgo: 4,
+  },
+  {
+    title: "Festive offer post (approved)",
+    channel: "instagram",
+    goal: "Drive festive-season sales of the Night Cream",
+    audience: "Women 25–40 in metro cities",
+    cta: "Shop the festive sale",
+    text: "#collab Festive sale: enjoy a 15% discount on the Lumina Niacinamide Night Cream. Shop the festive sale now.",
+    daysAgo: 3,
+  },
+];

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,16 @@ export function FactEditor({ code, value, validUntil }: { code: string; value: s
   const [until, setUntil] = useState(validUntil ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [affected, setAffected] = useState<number | null>(null);
 
   if (!open) {
     return (
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)} aria-label={`Edit ${code}`}>
-        Edit
-      </Button>
+      <div className="flex flex-col items-start gap-1">
+        <Button size="sm" variant="ghost" onClick={() => setOpen(true)} aria-label={`Edit ${code}`}>
+          Edit
+        </Button>
+        {affected !== null && <DriftResult code={code} affected={affected} />}
+      </div>
     );
   }
 
@@ -27,7 +32,8 @@ export function FactEditor({ code, value, validUntil }: { code: string; value: s
     setBusy(true);
     setError(null);
     try {
-      await callApi(`/api/facts/${code}`, "PATCH", { value: v, validUntil: until || null });
+      const res = await callApi<{ drift?: { byUsage: number; byScan: number } | null }>(`/api/facts/${code}`, "PATCH", { value: v, validUntil: until || null });
+      setAffected(res?.drift ? res.drift.byUsage + res.drift.byScan : 0);
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -49,5 +55,21 @@ export function FactEditor({ code, value, validUntil }: { code: string; value: s
       </div>
       {error && <p role="alert" className="text-xs text-red-800">{error}</p>}
     </form>
+  );
+}
+
+/** Shown after a fact edit: how many approved / in-review submissions the change affects. */
+export function DriftResult({ code, affected }: { code: string; affected: number }) {
+  return (
+    <p role="status" className="whitespace-nowrap text-xs">
+      {affected > 0 ? (
+        <>
+          <b>{affected}</b> submission{affected === 1 ? "" : "s"} affected →{" "}
+          <Link href="/drift" className="font-medium text-primary hover:underline">View drift</Link>
+        </>
+      ) : (
+        <span className="text-muted-foreground">Saved. No approved content uses the old {code} value.</span>
+      )}
+    </p>
   );
 }

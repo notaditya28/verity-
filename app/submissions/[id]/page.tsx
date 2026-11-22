@@ -13,6 +13,8 @@ import { CreatorToolbar } from "@/components/workflow/creator-toolbar";
 import { FindingActions } from "@/components/workflow/finding-actions";
 import { ManagerPanel } from "@/components/workflow/manager-panel";
 import { getSubmissionDetail } from "@/lib/queries";
+import { listAlerts } from "@/lib/drift/queries";
+import { displayValue } from "@/lib/drift/match";
 import { getRole } from "@/lib/role";
 import { uuidSchema } from "@/lib/validation";
 import { RerunButton } from "./rerun-button";
@@ -27,8 +29,9 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
 
   let data: Awaited<ReturnType<typeof getSubmissionDetail>>;
   let role: Awaited<ReturnType<typeof getRole>>;
+  let drift: Awaited<ReturnType<typeof listAlerts>> = [];
   try {
-    [data, role] = await Promise.all([getSubmissionDetail(id), getRole()]);
+    [data, role, drift] = await Promise.all([getSubmissionDetail(id), getRole(), listAlerts(undefined, id).catch(() => [])]);
   } catch (err) {
     console.error(err);
     return <DbError what="this submission" />;
@@ -85,6 +88,21 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
         </div>
         <StatusBadge status={submission.status} />
       </div>
+
+      {drift
+        .filter((a) => a.status === "open" || a.status === "sent_back")
+        .map((a) => (
+          <div key={a.id} role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 p-3 text-sm text-orange-950">
+            <span>
+              <b>Fact Drift:</b> this {a.submission.status === "approved" ? "approved" : ""} post uses <b>{a.matchedText}</b> ({a.factCode}).{" "}
+              {a.reason === "changed" && a.newFact
+                ? `The current approved ${a.newFact.attribute} is ${displayValue(a.newFact)} (changed ${new Date(a.newFact.validFrom).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}).`
+                : `${a.factCode} expired${a.oldFact.validUntil ? ` on ${new Date(a.oldFact.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}` : ""}.`}
+              {a.status === "sent_back" && " Sent back for update."}
+            </span>
+            <Link href={`/drift?status=${a.status}`} className="ml-auto font-medium underline-offset-4 hover:underline">View on Drift</Link>
+          </div>
+        ))}
 
       {submission.status === "changes_requested" && lastRequest && (
         <p role="status" className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-sm text-orange-950">

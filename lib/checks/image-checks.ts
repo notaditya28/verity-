@@ -2,9 +2,9 @@
 // text read from the image. Image findings have no text span: their fix is advice, except A-01, whose fix is the
 // proposed alt text (applied to the next version's alt text when accepted).
 import { contrastRatio, deltaE2000, hexToRgb } from "../images/color";
-import { runDeterministicChecks } from "./deterministic";
+import { runDeterministicChecksWithUsages } from "./deterministic";
 import { ruleEvidence } from "./format";
-import type { Channel, CheckContext, DraftFinding, EngineRule } from "./types";
+import type { Channel, CheckContext, DraftFinding, DraftUsage, EngineRule } from "./types";
 
 export interface ImageFacts {
   altText: string | null;
@@ -122,11 +122,17 @@ export function checkPalette(r: EngineRule, img: ImageFacts, palette: { name: st
 const BODY_ONLY_RULES = new Set(["ASCI-01", "A-03"]);
 
 export function imageTextFindings(extractedText: string, channel: Channel, ctx: CheckContext): DraftFinding[] {
-  if (!extractedText.trim()) return [];
+  return imageTextCheck(extractedText, channel, ctx).findings;
+}
+
+/** Image-text findings plus the facts the image text relies on (spans are offsets in the extracted text). */
+export function imageTextCheck(extractedText: string, channel: Channel, ctx: CheckContext): { findings: DraftFinding[]; usages: DraftUsage[] } {
+  if (!extractedText.trim()) return { findings: [], usages: [] };
   // Line breaks in an image are layout, not sentence ends: "Lumina Vitamin C Serum" / "now just ₹399" is one
   // message. Joining lines lets a price match the product named on the line above. Same length, so quotes match.
   const asText = extractedText.replace(/\n/g, " ");
-  return runDeterministicChecks({ text: asText, channel }, ctx)
+  const { findings: raw, usages } = runDeterministicChecksWithUsages({ text: asText, channel }, ctx);
+  const findings = raw
     .filter((f) => !f.ruleCode || !BODY_ONLY_RULES.has(f.ruleCode))
     .map((f) => {
       const q = f.quote ?? "";
@@ -138,6 +144,7 @@ export function imageTextFindings(extractedText: string, channel: Channel, ctx: 
       } else if (f.suggestedFix) fix = f.suggestedFix;
       return { ...f, spanStart: null, spanEnd: null, explanation: `In the image: ${f.explanation}`, suggestedFix: fix };
     });
+  return { findings, usages };
 }
 
 export function runImageChecks(img: ImageFacts, ctx: CheckContext, palette: { name: string; hex: string }[]): DraftFinding[] {

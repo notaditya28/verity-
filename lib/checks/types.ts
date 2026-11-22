@@ -16,6 +16,8 @@ export interface EngineRule {
 }
 
 export interface EngineFact {
+  /** Database row id (the exact fact version). Absent for plain seed objects in offline scripts. */
+  id?: string;
   code: string;
   subject: string;
   attribute: string;
@@ -65,4 +67,13 @@ export interface DraftFinding {
   evidence: string | null;
   suggestedFix: string | null;
   confidence: number;
+}
+
+/** Content relied on a fact (matched or mismatched). spanStart/spanEnd are offsets in the text that was checked. */
+export interface DraftUsage {
+  factCode: string;
+  factId: string | null;
+  matchedText: string;
+  spanStart: number | null;
+  spanEnd: number | null;
 }

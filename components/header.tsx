@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { HelpCircle, ShieldCheck } from "lucide-react";
+import { HelpCircle, ShieldCheck, TriangleAlert } from "lucide-react";
+import { openDriftCount } from "@/lib/drift/detect";
 import { getRole } from "@/lib/role";
 import { DEMO_ORG_NAME } from "@/lib/demo/constants";
 import { RoleSwitcher } from "./role-switcher";
@@ -15,7 +16,7 @@ const NAV = [
 ];
 
 export async function Header() {
-  const role = await getRole();
+  const [role, drift] = await Promise.all([getRole(), openDriftCount()]);
   return (
     <header className="border-b bg-background">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
@@ -32,6 +33,14 @@ export async function Header() {
               {n.label}
             </Link>
           ))}
+          <Link
+            href="/drift"
+            aria-label={`Fact Drift: ${drift} open alert${drift === 1 ? "" : "s"}`}
+            className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-1 ${drift ? "bg-orange-100 font-medium text-orange-900 hover:bg-orange-200" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+          >
+            {drift > 0 && <TriangleAlert className="h-3.5 w-3.5" aria-hidden />}
+            Drift · {drift}
+          </Link>
         </nav>
         <div className="ml-auto flex items-center gap-1">
           <Popover>

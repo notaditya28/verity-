@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { managerDecisionSchema, uuidSchema, zodMessage } from "@/lib/validation";
 import { audit, jsonError, loadLatest, requireRole } from "@/lib/workflow";
+import { resolveDriftForSubmission } from "@/lib/drift/detect";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await db.insert(schema.decisions).values({ submissionId: id, role: "manager", action, comment: comment || null });
     await db.update(schema.submissions).set({ status: NEXT_STATUS[action], updatedAt: new Date() }).where(eq(schema.submissions.id, id));
     await audit("manager", `submission.${action}`, "submission", id, { version: version.versionNumber, from: submission.status, to: NEXT_STATUS[action], comment });
-    return NextResponse.json({ status: NEXT_STATUS[action] });
+    const driftResolved = action === "approve" ? await resolveDriftForSubmission(id).catch(() => 0) : 0;
+    return NextResponse.json({ status: NEXT_STATUS[action], driftResolved });
   } catch (err) {
     console.error(err);
     return jsonError("Could not record the decision. Please try again.", 500);

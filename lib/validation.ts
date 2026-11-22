@@ -60,3 +60,13 @@ export const factEditSchema = z.object({
 export function zodMessage(err: z.ZodError): string {
   return err.issues.map((i) => i.message).join(". ");
 }
+
+export const driftActionSchema = z
+  .object({
+    action: z.enum(["send_back", "dismiss"]),
+    reason: z.string().trim().max(500).default(""),
+  })
+  .refine((v) => v.action !== "dismiss" || v.reason.length >= 3, {
+    message: "Give a short reason for dismissing (e.g. the post is archived)",
+    path: ["reason"],
+  });

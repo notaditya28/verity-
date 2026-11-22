@@ -10,3 +10,7 @@ next-env.d.ts
 .vercel
 npm-debug.log*
 .DS_Store
+
+# Submission documents (kept outside the repo)
+*.pptx
+Verity_Round2_Build.pdf

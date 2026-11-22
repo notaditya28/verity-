@@ -2,7 +2,7 @@ import "server-only";
 import { friendlyAiError, generateJson, geminiConfigured, geminiModel } from "../ai/gemini";
 import { buildJudgePrompt, JUDGE_RESPONSE_SCHEMA, JUDGE_SYSTEM, PROMPT_VERSION } from "../prompts/judge";
 import { pgTextRetriever, type Retriever } from "./retrieve";
-import type { CheckContext, DraftFinding } from "./types";
+import type { CheckContext, DraftFinding, DraftUsage } from "./types";
 import { validateAiFindings, type ValidationStats } from "./validate-ai";
 
 export const AI_TIMEOUT_MS = 22_000;
@@ -13,6 +13,7 @@ export type AiStageResult =
   | {
       status: "completed";
       findings: DraftFinding[];
+      usages: DraftUsage[];
       stats: ValidationStats;
       model: string;
       promptVersion: string;
@@ -57,7 +58,7 @@ export async function runAiStage(args: {
       alreadyFound: args.deterministic,
     });
     const { data: raw, model: usedModel } = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS });
-    const { findings, stats } = validateAiFindings(raw, {
+    const { findings, stats, usages } = validateAiFindings(raw, {
       text: args.text,
       extractedText: args.extractedText,
       retrievedRules: retrieved.rules,
@@ -67,6 +68,7 @@ export async function runAiStage(args: {
     return {
       status: "completed",
       findings,
+      usages,
       stats,
       model: usedModel,
       promptVersion: PROMPT_VERSION,

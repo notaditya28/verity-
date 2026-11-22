@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import { runAiStage } from "./ai-stage";
 import { loadPolicy } from "./context";
-import { runDeterministicChecks } from "./deterministic";
-import { imageTextFindings, runImageChecks } from "./image-checks";
+import { runDeterministicChecksWithUsages } from "./deterministic";
+import { imageTextCheck, runImageChecks } from "./image-checks";
+import type { DraftUsage } from "./types";
 import { runImageStage } from "./image-stage";
 import { redact } from "./redact";
 import { VISION_PROMPT_VERSION } from "../prompts/vision";
@@ -39,11 +40,24 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
 
   let deterministicCount = 0;
   try {
-    const drafts = [
-      ...(version.text.trim() ? runDeterministicChecks({ text: version.text, channel: submission.channel }, ctx) : []),
-      ...(extractedText ? imageTextFindings(extractedText, submission.channel, ctx) : []),
-      ...(image ? runImageChecks(image.facts, ctx, palette) : []),
-    ];
+    const body = version.text.trim() ? runDeterministicChecksWithUsages({ text: version.text, channel: submission.channel }, ctx) : { findings: [], usages: [] };
+    const imgText = extractedText ? imageTextCheck(extractedText, submission.channel, ctx) : { findings: [], usages: [] };
+    const drafts = [...body.findings, ...imgText.findings, ...(image ? runImageChecks(image.facts, ctx, palette) : [])];
+    const usageRows = (list: DraftUsage[], source: "rule" | "ai" | "image_text") =>
+      list.map((u) => ({
+        orgId: submission.orgId,
+        checkId: check.id,
+        submissionId: submission.id,
+        submissionVersionId: version.id,
+        factCode: u.factCode,
+        factId: u.factId,
+        matchedText: u.matchedText,
+        spanStart: u.spanStart,
+        spanEnd: u.spanEnd,
+        source,
+      }));
+    const ruleUsages = [...usageRows(body.usages, "rule"), ...usageRows(imgText.usages, "image_text")];
+    if (ruleUsages.length) await db.insert(schema.factUsages).values(ruleUsages);
     deterministicCount = drafts.length;
     if (drafts.length) await db.insert(schema.findings).values(drafts.map((d) => ({ ...d, checkId: check.id })));
 
@@ -70,6 +84,7 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
     if (ai.status === "completed" && ai.findings.length) {
       await db.insert(schema.findings).values(ai.findings.map((d) => ({ ...d, checkId: check.id })));
     }
+    if (ai.status === "completed" && ai.usages.length) await db.insert(schema.factUsages).values(usageRows(ai.usages, "ai"));
     await db
       .update(schema.checks)
       .set({
@@ -93,6 +108,7 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
         checkId: check.id,
         policyVersion: policyVersion.versionNumber,
         ruleFindings: drafts.length,
+        factUsages: { rule: body.usages.length, imageText: imgText.usages.length, ai: ai.status === "completed" ? ai.usages.length : 0 },
         image: image
           ? { readNow: image.readNow, textBlocks: image.facts.blocks.length, colours: image.facts.colours.length, error: image.error }
           : null,

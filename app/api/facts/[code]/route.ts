@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { DEMO_ORG_ID } from "@/lib/demo/constants";
 import { factEditSchema, zodMessage } from "@/lib/validation";
+import { detectDrift, detectExpired } from "@/lib/drift/detect";
 import { jsonError, requireRole } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ code: 
         .returning();
       await tx.update(schema.facts).set({ current: false }).where(eq(schema.facts.id, old.id));
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-      await tx.insert(schema.facts).values({
+      const [created] = await tx.insert(schema.facts).values({
         orgId: DEMO_ORG_ID,
         code,
         subject: old.subject,
@@ -55,7 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ code: 
         validUntil,
         current: true,
         policyVersionId: pv.id,
-      });
+      }).returning();
       await tx.insert(schema.auditLog).values({
         orgId: DEMO_ORG_ID,
         actorRole: "manager",
@@ -64,10 +65,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ code: 
         entityId: code,
         details: { from: old.value, to: input.value, validUntil, policyVersion: versionNumber },
       });
-      return { unchanged: false as const, policyVersion: versionNumber };
+      return { unchanged: false as const, policyVersion: versionNumber, old, created };
     });
     if (!result) return jsonError("Fact not found", 404);
-    return NextResponse.json(result);
+    if (result.unchanged) return NextResponse.json({ unchanged: true });
+    // Fact Drift: find approved / in-review content that still uses the old value (same request, < 10 s on demo data).
+    // A validity-only edit doesn't change the value; expiry detection handles a past valid-until date.
+    let drift = null;
+    try {
+      if (result.old.value !== result.created.value) drift = await detectDrift(result.old, result.created, "changed");
+      else await detectExpired();
+    } catch (err) {
+      console.error("drift detection failed", err);
+    }
+    return NextResponse.json({ unchanged: false, policyVersion: result.policyVersion, drift });
   } catch (err) {
     console.error(err);
     return jsonError("Could not update the fact. Please try again.", 500);

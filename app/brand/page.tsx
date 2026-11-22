@@ -4,6 +4,9 @@ import { DbError } from "@/components/db-error";
 import { getBrandData } from "@/lib/queries";
 import { getRole } from "@/lib/role";
 import { FactEditor } from "./fact-editor";
+import { TryDrift } from "./try-drift";
+import { factHistory } from "@/lib/drift/queries";
+import { displayValue } from "@/lib/drift/match";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +22,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default async function BrandPage() {
   let data: Awaited<ReturnType<typeof getBrandData>>;
+  let history: Awaited<ReturnType<typeof factHistory>>;
   const isManager = (await getRole()) === "manager";
   try {
-    data = await getBrandData();
+    [data, history] = await Promise.all([getBrandData(), factHistory()]);
   } catch (err) {
     console.error(err);
     return <DbError what="brand guidelines" />;
@@ -75,6 +79,7 @@ export default async function BrandPage() {
             ? "Editing a fact creates a new policy version. The old value is kept for the audit trail, and new checks use the new value."
             : "Switch to Manager in the header to edit facts. Every edit creates a new policy version."}
         </p>
+        {isManager && facts.some((f) => f.code === "F-12") && <TryDrift currentValue={facts.find((f) => f.code === "F-12")!.value} />}
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted text-xs uppercase text-muted-foreground">
@@ -93,7 +98,23 @@ export default async function BrandPage() {
             <tbody>
               {facts.map((f) => (
                 <tr key={f.id} className="border-t align-top">
-                  <td className="px-3 py-2 whitespace-nowrap font-mono font-medium">{f.code}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono font-medium">
+                    {f.code}
+                    {(history.get(f.code)?.length ?? 0) > 1 && (
+                      <details className="mt-1 font-sans text-xs font-normal">
+                        <summary className="cursor-pointer text-primary">History ({history.get(f.code)!.length})</summary>
+                        <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                          {history.get(f.code)!.map((h) => (
+                            <li key={h.id} className="whitespace-nowrap">
+                              {h.current ? <b className="text-foreground">{displayValue(h)}</b> : <del>{displayValue(h)}</del>} from {h.validFrom} · v
+                              {versionById.get(h.policyVersionId) ?? "?"}
+                              {h.current ? " (current)" : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </td>
                   <td className="px-3 py-2">{f.subject}</td>
                   <td className="px-3 py-2">{f.attribute}</td>
                   <td className="px-3 py-2 font-medium">

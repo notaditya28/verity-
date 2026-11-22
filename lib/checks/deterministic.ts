@@ -1,6 +1,6 @@
 // Deterministic (no-LLM) checks. Pure functions: same input + context → same findings.
 import { factEvidence, factValueDisplay, isFactValid, ruleEvidence } from "./format";
-import type { CheckContext, CheckInput, DraftFinding, EngineFact, EngineRule } from "./types";
+import type { CheckContext, CheckInput, DraftFinding, DraftUsage, EngineFact, EngineRule } from "./types";
 
 interface Hit {
   start: number;
@@ -72,6 +72,12 @@ function base(rule: EngineRule, h: Hit | null): Omit<DraftFinding, "explanation"
     evidence: ruleEvidence(rule),
     confidence: 1,
   };
+}
+
+/** Records that the content relied on a fact (whether or not it matched). Used by Fact Drift. */
+function used(u: DraftUsage[], fact: EngineFact | undefined, h: Hit) {
+  if (!fact) return;
+  u.push({ factCode: fact.code, factId: fact.id ?? null, matchedText: h.quote, spanStart: h.start, spanEnd: h.end });
 }
 
 function show(q: string) {
@@ -168,7 +174,7 @@ function checkTone(text: string, r: EngineRule): DraftFinding[] {
 }
 
 // ---------- superlatives (C-01) ----------
-function checkSuperlatives(text: string, r: EngineRule, ctx: CheckContext): DraftFinding[] {
+function checkSuperlatives(text: string, r: EngineRule, ctx: CheckContext, u: DraftUsage[]): DraftFinding[] {
   const out: DraftFinding[] = [];
   const claims = new Claims();
   const factCode = strParam(r, "supportingFact");
@@ -180,6 +186,7 @@ function checkSuperlatives(text: string, r: EngineRule, ctx: CheckContext): Draf
   if (bsp) {
     for (const h of hits(text, bsp)) {
       claims.claim(h);
+      used(u, fact, h);
       if (factOk) continue;
       out.push({
         ...base(r, h),
@@ -334,7 +341,7 @@ function numberFinding(
   };
 }
 
-function checkNumbers(text: string, r: EngineRule, ctx: CheckContext): DraftFinding[] {
+function checkNumbers(text: string, r: EngineRule, ctx: CheckContext, u: DraftUsage[]): DraftFinding[] {
   const out: DraftFinding[] = [];
   const inrFacts = ctx.facts.filter((f) => f.unit === "INR");
   const thresholdFacts = inrFacts.filter((f) => /threshold/i.test(f.attribute));
@@ -359,6 +366,7 @@ function checkNumbers(text: string, r: EngineRule, ctx: CheckContext): DraftFind
       });
       continue;
     }
+    used(u, match.fact, h);
     const f = numberFinding(r, h, stated, match.fact, match.confident, ctx.today, `₹${match.fact.value}`);
     if (f) out.push(f);
   }
@@ -371,6 +379,7 @@ function checkNumbers(text: string, r: EngineRule, ctx: CheckContext): DraftFind
     const prev = /([a-z]+)\s*$/i.exec(text.slice(0, h.start))?.[1]?.toLowerCase();
     const fact = pctFacts.find((f) => factKeywords(f).some((k) => k === next || k === prev));
     if (!fact) continue;
+    used(u, fact, h);
     const f = numberFinding(r, h, m[1], fact, true, ctx.today, `${fact.value}%`);
     if (f) out.push(f);
   }
@@ -381,6 +390,7 @@ function checkNumbers(text: string, r: EngineRule, ctx: CheckContext): DraftFind
     const h: Hit = { start: m.index!, end: m.index! + m[0].length, quote: m[0] };
     const fact = spfFacts[0];
     if (!fact) continue;
+    used(u, fact, h);
     const factSpf = /SPF\s?(\d+)/i.exec(fact.value)![1];
     const f = numberFinding(r, h, m[1], { ...fact, value: factSpf }, true, ctx.today, `SPF ${factSpf}`);
     if (f) out.push({ ...f, evidence: factEvidence(fact) });
@@ -389,12 +399,16 @@ function checkNumbers(text: string, r: EngineRule, ctx: CheckContext): DraftFind
 }
 
 // ---------- "clinically proven" (C-04) ----------
-function checkClinical(text: string, r: EngineRule, ctx: CheckContext): DraftFinding[] {
+function checkClinical(text: string, r: EngineRule, ctx: CheckContext, u: DraftUsage[]): DraftFinding[] {
   const out: DraftFinding[] = [];
   const fact = ctx.facts.find((f) => f.code === strParam(r, "factCode"));
+  const alt = ctx.facts.find((f) => f.code === strParam(r, "alternativeFactCode"));
+  const altPhrase = strParam(r, "alternative");
+  // The approved alternative wording ("dermatologically tested") relies on its own fact.
+  if (alt && altPhrase) for (const h of hits(text, `\\b${escapeRegex(altPhrase)}\\b`)) used(u, alt, h);
+  for (const p of strParams(r, "patterns")) for (const h of hits(text, p)) used(u, fact, h);
   const approved = !!fact && /^approved/i.test(fact.value) && isFactValid(fact, ctx.today);
   if (approved) return out;
-  const alt = ctx.facts.find((f) => f.code === strParam(r, "alternativeFactCode"));
   const altOk = !!alt && /^approved/i.test(alt.value) && isFactValid(alt, ctx.today);
   const altText = strParam(r, "alternative") ?? "";
   for (const p of strParams(r, "patterns")) {
@@ -487,7 +501,7 @@ function checkMedical(text: string, r: EngineRule): DraftFinding[] {
 }
 
 // ---------- delivery promises (M-01) ----------
-function checkDelivery(text: string, r: EngineRule, ctx: CheckContext): DraftFinding[] {
+function checkDelivery(text: string, r: EngineRule, ctx: CheckContext, u: DraftUsage[]): DraftFinding[] {
   const out: DraftFinding[] = [];
   const claims = new Claims();
   const fact = ctx.facts.find((f) => f.code === strParam(r, "factCode"));
@@ -518,9 +532,10 @@ function checkDelivery(text: string, r: EngineRule, ctx: CheckContext): DraftFin
     for (const m of text.matchAll(re)) {
       const a = parseInt(m[1], 10);
       const b = m[2] ? parseInt(m[2], 10) : a;
-      if (a === lo && b === (hi || lo)) continue;
       const numStart = m.index! + m[0].indexOf(m[1]);
       const h: Hit = { start: numStart, end: m.index! + m[0].length, quote: text.slice(numStart, m.index! + m[0].length) };
+      used(u, fact, h);
+      if (a === lo && b === (hi || lo)) continue;
       if (!claims.claim(h)) continue;
       out.push(withFact(h, `${show(h.quote)} doesn't match the approved delivery time of ${approved} (${fact.code}).`, approved));
     }
@@ -561,10 +576,16 @@ function checkReadability(text: string, r: EngineRule): DraftFinding[] {
 
 // ---------- entry point ----------
 export function runDeterministicChecks(input: CheckInput, ctx: CheckContext): DraftFinding[] {
+  return runDeterministicChecksWithUsages(input, ctx).findings;
+}
+
+/** Findings plus every fact the content relied on (correct or not), for Fact Drift. */
+export function runDeterministicChecksWithUsages(input: CheckInput, ctx: CheckContext): { findings: DraftFinding[]; usages: DraftUsage[] } {
   const active = new Map(ctx.rules.filter((r) => r.active).map((r) => [r.code, r]));
   const rule = (c: string) => active.get(c);
   const text = input.text;
   const out: DraftFinding[] = [];
+  const usages: DraftUsage[] = [];
 
   out.push(...checkTerms(text, ctx, rule));
   const run = (code: string, fn: (r: EngineRule) => DraftFinding[]) => {
@@ -572,14 +593,22 @@ export function runDeterministicChecks(input: CheckInput, ctx: CheckContext): Dr
     if (r) out.push(...fn(r));
   };
   run("T-02", (r) => checkTone(text, r));
-  run("C-01", (r) => checkSuperlatives(text, r, ctx));
+  run("C-01", (r) => checkSuperlatives(text, r, ctx, usages));
   run("C-02", (r) => checkGuarantees(text, r));
-  run("C-03", (r) => checkNumbers(text, r, ctx));
-  run("C-04", (r) => checkClinical(text, r, ctx));
+  run("C-03", (r) => checkNumbers(text, r, ctx, usages));
+  run("C-04", (r) => checkClinical(text, r, ctx, usages));
   run("ASCI-01", (r) => checkDisclosure(text, input.channel, r));
   run("ASCI-02", (r) => checkMedical(text, r));
-  run("M-01", (r) => checkDelivery(text, r, ctx));
+  run("M-01", (r) => checkDelivery(text, r, ctx, usages));
   run("A-03", (r) => checkReadability(text, r));
 
-  return out.sort((a, b) => (a.spanStart ?? Infinity) - (b.spanStart ?? Infinity));
+  // One usage per fact + span (several rules can see the same number).
+  const seen = new Set<string>();
+  const uniq = usages.filter((x) => {
+    const k = `${x.factCode}|${x.spanStart}|${x.spanEnd}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return { findings: out.sort((a, b) => (a.spanStart ?? Infinity) - (b.spanStart ?? Infinity)), usages: uniq };
 }
