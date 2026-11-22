@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardCheck, FileText, ListChecks, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StartHere } from "@/components/start-here";
 
 const STEPS = [
   { icon: FileText, title: "Submit", text: "A creator submits a post, ad, email or image with its goal, audience and call to action." },
@@ -27,6 +28,8 @@ export default function Home() {
         </div>
         <p className="text-xs text-muted-foreground">No sign-in needed. Demo brand “Lumina Skin” is fictional.</p>
       </section>
+
+      <StartHere />
 
       <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="How Verity works">
         {STEPS.map((s, i) => (

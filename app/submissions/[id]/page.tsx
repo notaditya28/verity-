@@ -177,6 +177,7 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
           toApply={toApply}
           blockers={blockers}
           nextVersion={(version?.versionNumber ?? 1) + 1}
+          hasImage={!!version?.imageUrl}
         />
       )}
       {isCreator && !editable && (

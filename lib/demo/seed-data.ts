@@ -96,7 +96,7 @@ export const SEED_RULES: SeedRule[] = [
         "\\bguarantee(d|s)?\\b",
         "\\b100\\s?%\\s?(results?|effective)\\b",
         "\\bpermanent(ly)?\\b",
-        "\\b(in|within)\\s+\\d+\\s+(days?|hours?)\\b",
+        "\\b(in|within)\\s+(\\d+|a|an|one|two|three|four|five|six|seven|ten|a few)\\s+(days?|hours?|weeks?|months?)\\b",
         "\\bovernight results?\\b",
       ],
     },
