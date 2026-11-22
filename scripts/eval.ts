@@ -274,6 +274,17 @@ async function main() {
     }
   }
 
+  // ---------------- 5. Fact Drift (database) ----------------
+  out("## 5. Fact Drift Alerts (database)");
+  out();
+  if (!process.argv.includes("--drift") || !(process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL)) {
+    out("Not run in this evaluation. Run `npm run eval -- --drift` with `DATABASE_URL` set. It re-seeds the demo org, runs each scenario through the same `updateFact` path as the app, and restores the demo afterwards.");
+    out();
+  } else {
+    out(await driftEval());
+    out();
+  }
+
   out("## Limits of this evaluation");
   out();
   out("- The labelled set is small (written for this MVP) and was written by the builder, so it measures whether each rule works as specified, not real-world accuracy.");
@@ -282,6 +293,93 @@ async function main() {
 
   writeFileSync(path.join(process.cwd(), "EVAL.md"), lines.join("\n") + "\n");
   console.log(lines.join("\n"));
+}
+
+/** Database-backed Fact Drift scenarios. Each starts from a fresh seed; AI is switched off so checks are rule-only. */
+async function driftEval(): Promise<string> {
+  delete process.env.GEMINI_API_KEY; // rule-only checks: deterministic and free
+  const { getDb, schema } = await import("../lib/db");
+  const { seedDemo } = await import("../lib/demo/seed");
+  const { updateFact } = await import("../lib/facts");
+  const { detectDrift, detectExpired, resolveDriftForSubmission } = await import("../lib/drift/detect");
+  const { runCheck } = await import("../lib/checks/run");
+  const { and, eq } = await import("drizzle-orm");
+  const db = getDb();
+  const lines: string[] = [];
+  const titles = async (ids: string[]) =>
+    ids.length ? (await db.select({ id: schema.submissions.id, title: schema.submissions.title }).from(schema.submissions)).filter((s) => ids.includes(s.id)).map((s) => s.title) : [];
+  const alertsNow = async (code: string) => db.select().from(schema.driftAlerts).where(eq(schema.driftAlerts.factCode, code));
+  const rows: string[] = [];
+  let tp = 0, fp = 0, fn = 0;
+  const record = async (name: string, code: string, expected: string[], ms: number, note = "") => {
+    const alerts = await alertsNow(code);
+    const found = await titles(alerts.map((a) => a.submissionId));
+    const hit = found.filter((f) => expected.includes(f)).length;
+    tp += hit; fp += found.length - hit; fn += expected.length - hit;
+    const ok = hit === expected.length && found.length === expected.length;
+    rows.push(`| ${name} | ${expected.join(", ") || "(none)"} | ${found.join(", ") || "(none)"} | ${[...new Set(alerts.map((a) => a.detection))].join(", ") || "—"} | ${ms} ms | ${ok ? "✅" : "❌"}${note ? " " + note : ""} |`);
+    return alerts;
+  };
+  const reseed = () => seedDemo(db as Parameters<typeof seedDemo>[0]);
+
+  await reseed();
+  let r = await updateFact("F-12", { value: "499" });
+  const a12 = await record("F-12 price ₹449 → ₹499", "F-12", ["Vitamin C Serum price post (approved)"], r.status === "updated" ? (r.drift?.ms ?? 0) : 0);
+  // idempotency: running detection again creates nothing new
+  const [oldF12] = await db.select().from(schema.facts).where(and(eq(schema.facts.code, "F-12"), eq(schema.facts.value, "449")));
+  const [newF12] = await db.select().from(schema.facts).where(and(eq(schema.facts.code, "F-12"), eq(schema.facts.current, true)));
+  const again = await detectDrift(oldF12, newF12, "changed");
+  lines.push(`Re-running detection for the same change created ${again.created} new alerts (idempotent).`);
+  // resolution: a fixed version clears the alert; an unfixed one doesn't
+  const subId = a12[0]?.submissionId;
+  if (subId) {
+    const [v1] = await db.select().from(schema.submissionVersions).where(eq(schema.submissionVersions.submissionId, subId));
+    const [v2] = await db.insert(schema.submissionVersions).values({ submissionId: subId, versionNumber: 2, text: v1.text }).returning();
+    await runCheck(v2.id);
+    const before = await resolveDriftForSubmission(subId);
+    const [v3] = await db.insert(schema.submissionVersions).values({ submissionId: subId, versionNumber: 3, text: v1.text.replace("₹449", "₹499") }).returning();
+    await runCheck(v3.id);
+    const after = await resolveDriftForSubmission(subId);
+    lines.push(`Auto-resolution: a re-approved version that still says ₹449 resolved ${before} alerts (expected 0); a version that says ₹499 resolved ${after} (expected 1).`);
+  }
+
+  await reseed();
+  r = await updateFact("F-31", { value: "599" });
+  await record("F-31 free-shipping threshold ₹499 → ₹599", "F-31", ["Free-shipping banner (approved)"], r.status === "updated" ? (r.drift?.ms ?? 0) : 0);
+
+  await reseed();
+  r = await updateFact("F-30", { value: "2–4" });
+  await record("F-30 delivery 3–5 → 2–4 days", "F-30", ["Delivery FAQ email (approved)"], r.status === "updated" ? (r.drift?.ms ?? 0) : 0);
+
+  await reseed();
+  r = await updateFact("F-14", { value: "599" });
+  await record("F-14 Night Cream price ₹549 → ₹599 (no post uses it)", "F-14", [], r.status === "updated" ? (r.drift?.ms ?? 0) : 0);
+
+  await reseed();
+  const t0 = Date.now();
+  await updateFact("F-32", { value: "15", validUntil: "2026-11-01" });
+  await detectExpired();
+  await record("F-32 festive discount expires", "F-32", ["Festive offer post (approved)"], Date.now() - t0);
+
+  await reseed();
+  const [ship] = await db.select().from(schema.submissions).where(eq(schema.submissions.title, "Free-shipping banner (approved)"));
+  await db.delete(schema.factUsages).where(eq(schema.factUsages.submissionId, ship.id));
+  r = await updateFact("F-31", { value: "599" });
+  await record("Fallback scan (no recorded usages) F-31 → ₹599", "F-31", ["Free-shipping banner (approved)"], r.status === "updated" ? (r.drift?.ms ?? 0) : 0);
+
+  await reseed(); // leave the demo clean
+
+  return [
+    "Six scenarios on the seeded demo (4 approved fictional posts), each from a fresh seed, through the same `updateFact` path as the app. Times are detection time inside the request.",
+    "",
+    "| Scenario | Expected alerts | Found | Detection | Time | OK |",
+    "|---|---|---|---|---|---|",
+    ...rows,
+    "",
+    `Precision ${tp}/${tp + fp}, recall ${tp}/${tp + fn}.`,
+    "",
+    ...lines.map((l) => `- ${l}`),
+  ].join("\n");
 }
 
 main().catch((e) => {
