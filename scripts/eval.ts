@@ -287,6 +287,23 @@ async function main() {
     out();
   }
 
+  // ---------------- 6. Confidential mode + AI-use log (offline, intercepted AI client) ----------------
+  out("## 6. Confidential mode and the AI-use log");
+  out();
+  out(confidentialEval());
+  out();
+
+  // ---------------- 7. Guideline-gap insights ----------------
+  out("## 7. Guideline-gap insights");
+  out();
+  if (!process.argv.includes("--insights") || !(process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL)) {
+    out("Database part not run in this evaluation. Run `npm run eval -- --insights` with `DATABASE_URL` set (it re-seeds the demo org). The offline ranking test (`scripts/test-insights.ts`) runs in `npm test`.");
+    out();
+  } else {
+    out(await insightsEval());
+    out();
+  }
+
   out("## Limits of this evaluation");
   out();
   out("- The labelled set is small (written for this MVP) and was written by the builder, so it measures whether each rule works as specified, not real-world accuracy.");
@@ -382,6 +399,64 @@ async function driftEval(): Promise<string> {
     "",
     ...lines.map((l) => `- ${l}`),
   ].join("\n");
+}
+
+/** Runs scripts/test-confidential.ts (AI client and log intercepted) and reports its checks verbatim. */
+function confidentialEval(): string {
+  try {
+    const outp = execSync("npx tsx --conditions=react-server scripts/test-confidential.ts", { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const checks = outp
+      .split(/\r?\n/)
+      .filter((l) => l.trim().startsWith("✓"))
+      .map((l) => `- ${l.trim().replace(/^✓\s*/, "✅ ")}`);
+    return [
+      "`scripts/test-confidential.ts` replaces the AI client and the log writer with test doubles (dependency injection in the AI gateway), then runs the real judge stage and gateway:",
+      "",
+      ...checks,
+      "",
+      `Result: ${checks.length} of ${checks.length} check groups passed.`,
+    ].join("\n");
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string };
+    return "❌ The confidential-mode test failed:\n\n```\n" + (e.stdout ?? "") + (e.stderr ?? "") + "\n```";
+  }
+}
+
+/** Database-backed: ranking on the seeded history, and our trigram similarity vs Postgres pg_trgm. */
+async function insightsEval(): Promise<string> {
+  const { getDb } = await import("../lib/db");
+  const { seedDemo } = await import("../lib/demo/seed");
+  const { loadInsights } = await import("../lib/insights/queries");
+  const { similarity } = await import("../lib/insights/rank");
+  const { sql } = await import("drizzle-orm");
+  const db = getDb();
+  await seedDemo(db as Parameters<typeof seedDemo>[0]);
+  const t0 = Date.now();
+  const ins = await loadInsights();
+  const ms = Date.now() - t0;
+  const lines = [
+    `Computed from the seeded demo history (fictional) in ${ms} ms. Planted: an ambiguous rule (T-02 on festival greetings), an uncovered topic (vegan / cruelty-free) and a repeated unsupported claim.`,
+    "",
+    "| Rank | Gap | Evidence |",
+    "|---|---|---|",
+    ...ins.gaps.map((g, i) => `| ${i + 1} | ${g.headline} | ${g.why} |`),
+    "",
+    `- Planted ambiguous rule ranked first: ${ins.gaps[0]?.key === "T-02" ? "✅ yes" : "❌ no"}`,
+    `- Uncovered topic found: ${ins.gaps.some((g) => g.kind === "uncovered_topic" && /vegan|cruelty/.test(g.key)) ? "✅ yes" : "❌ no"}`,
+    `- KPIs: ${ins.kpis.submissionsChecked} submissions checked, first-check pass rate ${ins.kpis.firstCheckPassRatePct}%, ${ins.kpis.openDisputes} open disputes, ${ins.kpis.uncoveredTopics} uncovered topic(s).`,
+  ];
+  // Our similarity() follows pg_trgm; compare with Postgres on the real unsupported-claim quotes.
+  const quotes = ["reduces dark spots by", "fades dark spots by", "reduce dark spots by", "vegan and cruelty free", "proudly cruelty free and never tested on animals"];
+  let maxDiff = 0;
+  for (let i = 0; i < quotes.length; i++) {
+    for (let j = i + 1; j < quotes.length; j++) {
+      const [row] = await db.execute<{ s: number }>(sql`select similarity(${quotes[i]}, ${quotes[j]})::float as s`);
+      maxDiff = Math.max(maxDiff, Math.abs(row.s - similarity(quotes[i], quotes[j])));
+    }
+  }
+  lines.push(`- Trigram similarity: our implementation vs Postgres \`similarity()\` on ${(quotes.length * (quotes.length - 1)) / 2} quote pairs, largest difference ${maxDiff.toFixed(6)}.`);
+  await seedDemo(db as Parameters<typeof seedDemo>[0]); // leave the demo clean
+  return lines.join("\n");
 }
 
 main().catch((e) => {
