@@ -4,7 +4,7 @@ import * as schema from "../db/schema";
 import { DEMO_ORG_ID, DEMO_ORG_NAME } from "./constants";
 import { runDeterministicChecksWithUsages } from "../checks/deterministic";
 import type { CheckContext } from "../checks/types";
-import { SEED_APPROVED_POSTS, SEED_FACTS, SEED_FONTS, SEED_PALETTE, SEED_RULES, SEED_TERMS } from "./seed-data";
+import { SEED_APPROVED_POSTS, SEED_FACTS, SEED_FONTS, SEED_PALETTE, SEED_PRIVACY_DRAFTS, SEED_RULES, SEED_SENSITIVE_TERMS, SEED_TERMS } from "./seed-data";
 
 type DB = PostgresJsDatabase<typeof schema>;
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -71,7 +71,86 @@ export async function seedDemo(db: DB) {
       today: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
     };
     await seedApprovedPosts(tx, pv.id, ctx);
+
+    await tx.insert(schema.sensitiveTerms).values(SEED_SENSITIVE_TERMS.map((t) => ({ orgId: DEMO_ORG_ID, ...t })));
+    await seedPrivacyDrafts(tx, pv.id, ctx);
   });
+}
+
+/**
+ * The confidential draft gets a real local check (rule engine only, exactly what runCheck does for confidential
+ * content) and an ai_calls row recording that nothing was sent. The withheld-section draft is left unchecked, so the
+ * first AI call for it is a real one a judge triggers with "Run check".
+ */
+async function seedPrivacyDrafts(tx: Tx, policyVersionId: string, ctx: CheckContext) {
+  for (const d of SEED_PRIVACY_DRAFTS) {
+    const created = daysAgo(1);
+    const [sub] = await tx
+      .insert(schema.submissions)
+      .values({
+        orgId: DEMO_ORG_ID,
+        title: d.title,
+        channel: d.channel,
+        goal: d.goal,
+        audience: d.audience,
+        cta: d.cta,
+        status: "draft",
+        demoHistory: true,
+        confidential: d.confidential,
+        createdAt: created,
+        updatedAt: created,
+      })
+      .returning();
+    const [ver] = await tx.insert(schema.submissionVersions).values({ submissionId: sub.id, versionNumber: 1, text: d.text, createdAt: created }).returning();
+    await tx.insert(schema.auditLog).values({
+      orgId: DEMO_ORG_ID,
+      actorRole: "creator",
+      action: "submission.created",
+      entity: "submission",
+      entityId: sub.id,
+      details: d.confidential ? { channel: d.channel, confidential: true, demoHistory: true } : { title: d.title, channel: d.channel, demoHistory: true },
+      createdAt: created,
+    });
+    if (!d.confidential) continue;
+
+    const { findings, usages } = runDeterministicChecksWithUsages({ text: d.text, channel: d.channel }, ctx);
+    const [check] = await tx
+      .insert(schema.checks)
+      .values({
+        submissionVersionId: ver.id,
+        policyVersionId,
+        status: "completed",
+        aiStatus: "skipped",
+        error: "Confidential: AI tone and claim checks were kept local. Nothing was sent to any AI provider.",
+        startedAt: created,
+        finishedAt: created,
+      })
+      .returning();
+    if (findings.length) await tx.insert(schema.findings).values(findings.map((f) => ({ ...f, checkId: check.id })));
+    if (usages.length) {
+      await tx.insert(schema.factUsages).values(
+        usages.map((u) => ({ orgId: DEMO_ORG_ID, checkId: check.id, submissionId: sub.id, submissionVersionId: ver.id, ...u, source: "rule" as const })),
+      );
+    }
+    await tx.insert(schema.aiCalls).values({
+      orgId: DEMO_ORG_ID,
+      submissionId: sub.id,
+      checkId: check.id,
+      purpose: "judge",
+      provider: "Google Gemini",
+      status: "skipped_confidential",
+      createdAt: created,
+    });
+    await tx.insert(schema.auditLog).values({
+      orgId: DEMO_ORG_ID,
+      actorRole: "system",
+      action: "check.completed",
+      entity: "submission",
+      entityId: sub.id,
+      details: { checkId: check.id, ruleFindings: findings.length, ai: { status: "skipped", confidential: true }, demoHistory: true },
+      createdAt: created,
+    });
+  }
 }
 
 /**

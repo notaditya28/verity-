@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarX, CheckCircle2 } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { DbError } from "@/components/db-error";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmissionFlags } from "@/components/flags";
 import { detectExpired } from "@/lib/drift/detect";
 import { contextSnippet, displayValue } from "@/lib/drift/match";
 import { ALERT_STATUSES, alertCounts, listAlerts, type AlertStatus, type AlertView } from "@/lib/drift/queries";
@@ -120,7 +121,7 @@ export default async function DriftPage({ searchParams }: { searchParams: Promis
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/submissions/${a.submission.id}`} className="font-medium hover:underline">{a.submission.title}</Link>
                       <StatusBadge status={a.submission.status as Parameters<typeof StatusBadge>[0]["status"]} />
-                      {a.submission.demoHistory && <Badge variant="outline">Demo history (fictional)</Badge>}
+                      <SubmissionFlags confidential={a.submission.confidential} demoHistory={a.submission.demoHistory} />
                       <Badge variant={STATUS_VARIANT[a.status]} className="ml-auto">{STATUS_LABEL[a.status]}</Badge>
                     </div>
                     <p className="text-sm">

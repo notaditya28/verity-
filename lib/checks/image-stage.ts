@@ -21,7 +21,10 @@ export interface ImageStageResult {
  * OCR + description + text-block colours measured from the pixels. Results are saved on the version so a
  * re-check reuses them. Never throws.
  */
-export async function runImageStage(version: SubmissionVersion): Promise<ImageStageResult | null> {
+export async function runImageStage(
+  version: SubmissionVersion,
+  opts: { orgId: string; submissionId: string; checkId: string; confidential: boolean },
+): Promise<ImageStageResult | null> {
   if (!version.imageUrl) return null;
   const img = decodeDataUrl(version.imageUrl);
   const base: ImageFacts = { altText: version.altText, description: version.visualDescription, colours: [], blocks: [] };
@@ -35,6 +38,18 @@ export async function runImageStage(version: SubmissionVersion): Promise<ImageSt
       console.error("palette extraction failed", err);
       colours = [];
     }
+  }
+
+  // Confidential: nothing leaves the server. Palette and alt text run offline; contrast is estimated from colours.
+  if (opts.confidential) {
+    await getDb().update(schema.submissionVersions).set({ imageAnalysis: { blocks: [], colours } }).where(eq(schema.submissionVersions.id, version.id));
+    return {
+      facts: { ...base, description: null, colours, blocks: [], estimateContrast: true },
+      extractedText: null,
+      readNow: false,
+      error: null,
+      skippedReason: "Confidential: the image was not sent to AI, so its text wasn't read and contrast is estimated from its colours.",
+    };
   }
 
   // Already read for this version: reuse.
@@ -61,7 +76,7 @@ export async function runImageStage(version: SubmissionVersion): Promise<ImageSt
   }
 
   try {
-    const vision = await readImage(img);
+    const vision = await readImage(img, { orgId: opts.orgId, submissionId: opts.submissionId, checkId: opts.checkId, confidential: false });
     const blocks = await measureTextBlocks(img.buffer, vision.text_blocks);
     await db
       .update(schema.submissionVersions)

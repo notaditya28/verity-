@@ -12,6 +12,8 @@ export interface ImageFacts {
   description: string | null;
   colours: { hex: string; share: number }[];
   blocks: { text: string; textHex: string; backgroundHex: string; method: "measured" | "estimated" }[];
+  /** No text boxes (confidential: the image wasn't read), so estimate contrast from the dominant colour pairs. */
+  estimateContrast?: boolean;
 }
 
 const GENERIC_ALT = /^(image|img|photo|picture|banner|graphic|ad|untitled|screenshot)?\s*\d*$|\.(png|jpe?g|webp|gif)$/i;
@@ -93,6 +95,34 @@ export function checkContrast(r: EngineRule, img: ImageFacts, palette: { name: s
   return out;
 }
 
+/**
+ * Offline contrast estimate for images whose text wasn't read (confidential mode): the most dominant colour is taken as
+ * the background and every other colour covering ≥ 1% as possible text. Pairs below the minimum are flagged as
+ * "needs human verification" at medium severity, because we can't tell which colours are text.
+ */
+export function checkContrastEstimate(r: EngineRule, img: ImageFacts): DraftFinding[] {
+  const min = num(r, "minRatio", 4.5);
+  const [bg, ...rest] = img.colours;
+  if (!bg) return [];
+  const out: DraftFinding[] = [];
+  for (const c of rest) {
+    if (c.share < 0.01) continue;
+    const ratio = contrastRatio(hexToRgb(c.hex), hexToRgb(bg.hex));
+    if (ratio >= min) continue;
+    out.push(
+      finding(r, {
+        severity: "medium",
+        label: "needs_human_verification",
+        explanation: `Estimated without reading the image (confidential): if ${c.hex} is used for text on the ${bg.hex} background, the contrast is ${ratio.toFixed(2)}:1, below ${min}:1. Check the text colours by eye.`,
+        suggestedFix: `If ${c.hex} is text, change it or the background so the ratio reaches ${min}:1.`,
+        confidence: 0.5,
+      }),
+    );
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
 export function checkPalette(r: EngineRule, img: ImageFacts, palette: { name: string; hex: string }[]): DraftFinding[] {
   if (!palette.length) return [];
   const maxDe = num(r, "maxDeltaE", 12);
@@ -154,7 +184,7 @@ export function runImageChecks(img: ImageFacts, ctx: CheckContext, palette: { na
   const a02 = active.get("A-02");
   const v01 = active.get("V-01");
   if (a01) out.push(...checkAltText(a01, img));
-  if (a02) out.push(...checkContrast(a02, img, palette));
+  if (a02) out.push(...(img.estimateContrast && !img.blocks.length ? checkContrastEstimate(a02, img) : checkContrast(a02, img, palette)));
   if (v01) out.push(...checkPalette(v01, img, palette));
   return out;
 }

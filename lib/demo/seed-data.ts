@@ -449,3 +449,33 @@ export const SEED_APPROVED_POSTS: SeedApprovedPost[] = [
     daysAgo: 3,
   },
 ];
+
+/** Round 3: org-specific words masked before any third-party AI call (fictional). */
+export const SEED_SENSITIVE_TERMS = [
+  { term: "Project Aurora", note: "unreleased product codename" },
+  { term: "GlowMart", note: "retail partner (launch not announced)" },
+];
+
+/** Round 3: one confidential draft (checked locally at seed time) and one draft with a withheld section (unchecked). */
+export const SEED_PRIVACY_DRAFTS = [
+  {
+    key: "confidential",
+    title: "Project Aurora launch teaser",
+    channel: "instagram" as const,
+    goal: "Build anticipation for an unreleased product",
+    audience: "Existing customers",
+    cta: "Join the waitlist",
+    text: "#collab Something new is coming from Lumina Skin. Project Aurora lands on 15 Dec. Guaranteed glow in 7 days! Join the waitlist via the link in bio.",
+    confidential: true,
+  },
+  {
+    key: "withheld",
+    title: "Partner newsletter draft",
+    channel: "email" as const,
+    goal: "Tell partners about the winter range",
+    audience: "Retail partners",
+    cta: "Reply to confirm stock",
+    text: "Hi team,\n\nOur winter range arrives next month. [[confidential]]Our new retinol night serum launches on 15 Jan, exclusively with GlowMart.[[/confidential]] The Lumina Vitamin C Serum stays at ₹449 for customers.\n\nQuestions? Call Asha on +91 98765 43210 or reply to confirm stock.\n\nTeam Lumina",
+    confidential: false,
+  },
+];

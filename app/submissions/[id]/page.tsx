@@ -8,12 +8,15 @@ import { HighlightedText } from "@/components/results/highlighted-text";
 import { overallStatus, SEV_RANK } from "@/components/results/severity";
 import { VersionDiff } from "@/components/results/version-diff";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmissionFlags } from "@/components/flags";
 import { isAutoApplicable } from "@/lib/checks/apply";
 import { CreatorToolbar } from "@/components/workflow/creator-toolbar";
 import { FindingActions } from "@/components/workflow/finding-actions";
 import { ManagerPanel } from "@/components/workflow/manager-panel";
 import { getSubmissionDetail } from "@/lib/queries";
 import { listAlerts } from "@/lib/drift/queries";
+import { listAiCalls } from "@/lib/ai/queries";
+import { AiDisclosure } from "@/components/ai-disclosure";
 import { displayValue } from "@/lib/drift/match";
 import { getRole } from "@/lib/role";
 import { uuidSchema } from "@/lib/validation";
@@ -30,8 +33,14 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
   let data: Awaited<ReturnType<typeof getSubmissionDetail>>;
   let role: Awaited<ReturnType<typeof getRole>>;
   let drift: Awaited<ReturnType<typeof listAlerts>> = [];
+  let aiCalls: Awaited<ReturnType<typeof listAiCalls>> = [];
   try {
-    [data, role, drift] = await Promise.all([getSubmissionDetail(id), getRole(), listAlerts(undefined, id).catch(() => [])]);
+    [data, role, drift, aiCalls] = await Promise.all([
+      getSubmissionDetail(id),
+      getRole(),
+      listAlerts(undefined, id).catch(() => []),
+      listAiCalls({ submissionId: id }, 50).catch(() => []),
+    ]);
   } catch (err) {
     console.error(err);
     return <DbError what="this submission" />;
@@ -81,6 +90,7 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
             {versions.length > 1 && ` (of ${versions.length} versions)`}
           </p>
           <h1 className="text-2xl font-bold">{submission.title}</h1>
+          <SubmissionFlags confidential={submission.confidential} demoHistory={submission.demoHistory} />
           <p className="text-sm text-muted-foreground">
             <span className="capitalize">{submission.channel}</span> · Goal: {submission.goal || "—"} · Audience: {submission.audience || "—"} · CTA:{" "}
             {submission.cta || "—"}
@@ -241,6 +251,13 @@ export default async function SubmissionPage({ params }: { params: Promise<{ id:
           {prevVersion && version && (
             <VersionDiff from={prevVersion.text} to={version.text} fromLabel={`v${prevVersion.versionNumber}`} toLabel={`v${version.versionNumber}`} />
           )}
+          <AiDisclosure
+            calls={aiCalls.map((r) => r.call)}
+            latestCheckId={check?.id ?? null}
+            confidential={submission.confidential}
+            isManager={role === "manager"}
+            submissionId={submission.id}
+          />
           {decisions.length > 0 && (
             <section aria-labelledby="history-h" className="space-y-2 rounded-lg border p-3">
               <h3 id="history-h" className="text-sm font-semibold">Review history</h3>

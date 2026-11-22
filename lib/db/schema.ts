@@ -132,6 +132,8 @@ export const submissions = pgTable("submissions", {
   currentVersion: integer("current_version").notNull().default(1),
   // Round 3: seeded, fictional history (shown as "Demo history (fictional)").
   demoHistory: boolean("demo_history").notNull().default(false),
+  // Round 3: confidential (unreleased) content is never sent to a third-party AI.
+  confidential: boolean("confidential").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -174,7 +176,9 @@ export const checks = pgTable("checks", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
-export const findings = pgTable("findings", {
+export const findings = pgTable(
+  "findings",
+  {
   id: uuid("id").primaryKey().defaultRandom(),
   checkId: uuid("check_id").notNull().references(() => checks.id, { onDelete: "cascade" }),
   ruleCode: text("rule_code"),
@@ -193,7 +197,9 @@ export const findings = pgTable("findings", {
   creatorDecision: creatorDecision("creator_decision").notNull().default("pending"),
   editedFix: text("edited_fix"),
   disputeReason: text("dispute_reason"),
-});
+  },
+  (t) => [index("findings_rule_code_idx").on(t.ruleCode), index("findings_check_idx").on(t.checkId)],
+);
 
 export const decisions = pgTable("decisions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -279,6 +285,52 @@ export const driftAlerts = pgTable(
   ],
 );
 
+// ---------- Round 3: Confidential mode + AI-use log ----------
+export const aiPurpose = pgEnum("ai_purpose", ["judge", "vision", "clarification"]);
+export const aiCallStatus = pgEnum("ai_call_status", ["ok", "error", "timeout", "skipped_confidential"]);
+
+/** One row per external AI call (or per confidential check kept local). The raw payload is never stored. */
+export const aiCalls = pgTable(
+  "ai_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    submissionId: uuid("submission_id").references(() => submissions.id, { onDelete: "cascade" }),
+    checkId: uuid("check_id").references(() => checks.id, { onDelete: "cascade" }),
+    purpose: aiPurpose("purpose").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    charsSent: integer("chars_sent").notNull().default(0),
+    imageSent: boolean("image_sent").notNull().default(false),
+    redactionCounts: jsonb("redaction_counts").$type<{ type: string; count: number }[]>().notNull().default([]),
+    withheldSections: integer("withheld_sections").notNull().default(0),
+    sensitiveTermsMasked: integer("sensitive_terms_masked").notNull().default(0),
+    payloadSha256: text("payload_sha256"),
+    status: aiCallStatus("status").notNull(),
+    latencyMs: integer("latency_ms"),
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_calls_org_created_idx").on(t.orgId, t.createdAt), index("ai_calls_submission_idx").on(t.submissionId)],
+);
+
+/** Org-specific words that must never reach a third-party AI (codenames, launch dates, partner names). */
+export const sensitiveTerms = pgTable(
+  "sensitive_terms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    note: text("note"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sensitive_terms_org_idx").on(t.orgId)],
+);
+
+export type AiCall = typeof aiCalls.$inferSelect;
+export type SensitiveTerm = typeof sensitiveTerms.$inferSelect;
 export type FactUsage = typeof factUsages.$inferSelect;
 export type DriftAlert = typeof driftAlerts.$inferSelect;
 

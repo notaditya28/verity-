@@ -17,6 +17,7 @@ export const createSubmissionSchema = z
       .max(2_000_000, "Image is too large (max ~1.5 MB)")
       .optional(),
     altText: z.string().trim().max(500).optional(),
+    confidential: z.boolean().default(false),
   })
   .refine((v) => v.text.trim().length > 0 || !!v.imageDataUrl, { message: "Add some text or an image to check", path: ["text"] });
 
@@ -70,3 +71,8 @@ export const driftActionSchema = z
     message: "Give a short reason for dismissing (e.g. the post is archived)",
     path: ["reason"],
   });
+
+export const sensitiveTermSchema = z.object({
+  term: z.string().trim().min(2, "Enter at least 2 characters").max(80),
+  note: z.string().trim().max(200).optional(),
+});

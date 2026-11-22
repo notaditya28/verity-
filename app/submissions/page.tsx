@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DbError } from "@/components/db-error";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmissionFlags } from "@/components/flags";
 import { listSubmissions } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function SubmissionsPage() {
               <Link href={`/submissions/${s.id}`} className="flex flex-wrap items-center gap-3 p-3 hover:bg-muted">
                 <span className="font-medium">{s.title}</span>
                 <span className="text-xs capitalize text-muted-foreground">{s.channel} · v{s.currentVersion}</span>
+                <SubmissionFlags confidential={s.confidential} demoHistory={s.demoHistory} />
                 <span className="ml-auto"><StatusBadge status={s.status} /></span>
               </Link>
             </li>

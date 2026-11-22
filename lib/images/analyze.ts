@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { generateJson } from "../ai/gemini";
-import { VISION_PROMPT, VISION_RESPONSE_SCHEMA, VISION_SYSTEM } from "../prompts/vision";
+import { aiCall } from "../ai/gateway";
+import { VISION_PROMPT, VISION_PROMPT_VERSION, VISION_RESPONSE_SCHEMA, VISION_SYSTEM } from "../prompts/vision";
 export { dominantColours, measureTextBlocks, type DominantColour, type MeasuredBlock } from "./pixels";
 
 export const VISION_TIMEOUT_MS = 20_000;
@@ -35,8 +35,17 @@ const visionSchema = z.object({
 export type VisionResult = z.infer<typeof visionSchema>;
 
 /** Gemini vision: OCR + description + text-block boxes. Output is zod-validated. Throws on failure. */
-export async function readImage(img: { mimeType: string; buffer: Buffer }): Promise<VisionResult> {
-  const { data: raw } = await generateJson({
+export async function readImage(
+  img: { mimeType: string; buffer: Buffer },
+  log: { orgId: string; submissionId?: string | null; checkId?: string | null; confidential: boolean },
+): Promise<VisionResult> {
+  const { data: raw } = await aiCall({
+    purpose: "vision",
+    orgId: log.orgId,
+    submissionId: log.submissionId,
+    checkId: log.checkId,
+    promptVersion: VISION_PROMPT_VERSION,
+    confidential: log.confidential,
     system: VISION_SYSTEM,
     prompt: VISION_PROMPT,
     schema: VISION_RESPONSE_SCHEMA,

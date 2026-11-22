@@ -5,8 +5,20 @@ import { getBrandData } from "@/lib/queries";
 import { getRole } from "@/lib/role";
 import { FactEditor } from "./fact-editor";
 import { TryDrift } from "./try-drift";
+import { SensitiveTerms } from "./sensitive-terms";
 import { factHistory } from "@/lib/drift/queries";
 import { displayValue } from "@/lib/drift/match";
+import { getDb, schema } from "@/lib/db";
+import { DEMO_ORG_ID } from "@/lib/demo/constants";
+import { and, eq } from "drizzle-orm";
+
+async function activeSensitiveTerms() {
+  return getDb()
+    .select({ id: schema.sensitiveTerms.id, term: schema.sensitiveTerms.term, note: schema.sensitiveTerms.note })
+    .from(schema.sensitiveTerms)
+    .where(and(eq(schema.sensitiveTerms.orgId, DEMO_ORG_ID), eq(schema.sensitiveTerms.active, true)))
+    .orderBy(schema.sensitiveTerms.createdAt);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +35,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 export default async function BrandPage() {
   let data: Awaited<ReturnType<typeof getBrandData>>;
   let history: Awaited<ReturnType<typeof factHistory>>;
+  let terms: Awaited<ReturnType<typeof activeSensitiveTerms>>;
   const isManager = (await getRole()) === "manager";
   try {
-    [data, history] = await Promise.all([getBrandData(), factHistory()]);
+    [data, history, terms] = await Promise.all([getBrandData(), factHistory(), activeSensitiveTerms()]);
   } catch (err) {
     console.error(err);
     return <DbError what="brand guidelines" />;
@@ -136,6 +149,15 @@ export default async function BrandPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section aria-labelledby="sensitive-h" className="space-y-3">
+        <h2 id="sensitive-h" className="text-lg font-semibold">Sensitive terms (kept away from AI)</h2>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Codenames, launch dates or partner names. Before any call to a third-party AI, each one is replaced with [SENSITIVE], on top of the
+          personal-data masking. Rule checks still see the real text. Every change is audited without storing the term.
+        </p>
+        <SensitiveTerms terms={terms} isManager={isManager} />
       </section>
 
       <section aria-labelledby="rules-h" className="space-y-4">

@@ -27,6 +27,7 @@ export async function POST(req: Request) {
           goal: input.goal,
           audience: input.audience,
           cta: input.cta,
+          confidential: input.confidential,
           createdByRole: role,
         })
         .returning();
@@ -46,7 +47,10 @@ export async function POST(req: Request) {
         action: "submission.created",
         entity: "submission",
         entityId: submission.id,
-        details: { title: input.title, channel: input.channel, hasImage: !!input.imageDataUrl },
+        // Confidential: no title or content in the audit log, only flags.
+        details: input.confidential
+          ? { channel: input.channel, hasImage: !!input.imageDataUrl, confidential: true }
+          : { title: input.title, channel: input.channel, hasImage: !!input.imageDataUrl, confidential: false },
       });
       return { submission, version };
     });

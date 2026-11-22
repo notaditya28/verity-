@@ -12,6 +12,7 @@ export interface Sample {
   text: string;
   imagePath?: string;
   altText?: string;
+  confidential?: boolean;
 }
 
 export const SAMPLES: Sample[] = [
@@ -65,5 +66,26 @@ export const SAMPLES: Sample[] = [
     audience: "College students and young professionals 18–28",
     cta: "Order now",
     text: "Our Lumina Sunscreen SPF 50 cures acne and treats pigmentation! Order now and get next-day delivery anywhere in India. Just ₹599.",
+  },
+  {
+    key: "confidential",
+    label: "Unreleased launch (confidential)",
+    title: "Project Aurora launch teaser",
+    channel: "instagram",
+    goal: "Build anticipation for an unreleased product",
+    audience: "Existing customers",
+    cta: "Join the waitlist",
+    text: "#collab Something new is coming from Lumina Skin. Project Aurora lands on 15 Dec. Guaranteed glow in 7 days! Join the waitlist via the link in bio.",
+    confidential: true,
+  },
+  {
+    key: "withheld",
+    label: "Email with a withheld section",
+    title: "Partner newsletter draft",
+    channel: "email",
+    goal: "Tell partners about the winter range",
+    audience: "Retail partners",
+    cta: "Reply to confirm stock",
+    text: "Hi team,\n\nOur winter range arrives next month. [[confidential]]Our new retinol night serum launches on 15 Jan, exclusively with GlowMart.[[/confidential]] The Lumina Vitamin C Serum stays at ₹449 for customers.\n\nQuestions? Call Asha on +91 98765 43210 or reply to confirm stock.\n\nTeam Lumina",
   },
 ];

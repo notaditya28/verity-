@@ -13,6 +13,7 @@ const NAV = [
   { href: "/review", label: "Review" },
   { href: "/brand", label: "Brand" },
   { href: "/audit", label: "Audit" },
+  { href: "/ai-log", label: "AI log" },
 ];
 
 export async function Header() {

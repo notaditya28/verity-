@@ -26,9 +26,10 @@ interface FormState {
   text: string;
   imageDataUrl?: string;
   altText: string;
+  confidential: boolean;
 }
 
-const EMPTY: FormState = { title: "", channel: "instagram", goal: "", audience: "", cta: "", text: "", altText: "" };
+const EMPTY: FormState = { title: "", channel: "instagram", goal: "", audience: "", cta: "", text: "", altText: "", confidential: false };
 
 async function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -60,7 +61,7 @@ export function SubmitForm() {
         /* image samples are optional */
       }
     }
-    setForm({ title: s.title, channel: s.channel, goal: s.goal, audience: s.audience, cta: s.cta, text: s.text, imageDataUrl, altText: s.altText ?? "" });
+    setForm({ title: s.title, channel: s.channel, goal: s.goal, audience: s.audience, cta: s.cta, text: s.text, imageDataUrl, altText: s.altText ?? "", confidential: !!s.confidential });
   }
 
   async function onImage(e: React.ChangeEvent<HTMLInputElement>) {
@@ -149,6 +150,25 @@ export function SubmitForm() {
             <Label htmlFor="alt">Image alt text</Label>
             <Input id="alt" value={form.altText} onChange={(e) => set("altText", e.target.value)} placeholder="Describe the image for screen readers" />
           </div>
+        </div>
+
+        <div className="space-y-1 rounded-lg border p-3">
+          <label htmlFor="confidential" className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              id="confidential"
+              type="checkbox"
+              checked={form.confidential}
+              onChange={(e) => set("confidential", e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+            />
+            <span>
+              <b>Confidential (unreleased launch):</b> keep this off third-party AI. Rule, palette and alt-text checks run on our server; AI tone and
+              claim checks and reading text inside images are skipped. This can&apos;t be switched off later.
+            </span>
+          </label>
+          <p className="pl-6 text-xs text-muted-foreground">
+            To keep just part of the text away from AI, wrap it in <code className="rounded bg-muted px-1">[[confidential]] … [[/confidential]]</code>.
+          </p>
         </div>
 
         {error && (

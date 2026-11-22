@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DbError } from "@/components/db-error";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmissionFlags } from "@/components/flags";
 import { getReviewQueue } from "@/lib/queries";
 import { getRole } from "@/lib/role";
 
@@ -28,6 +29,7 @@ export default async function ReviewPage() {
               {s.channel} · v{s.currentVersion}
               {s.stats && ` · ${s.stats.total} findings, ${s.stats.disputed} disputed${s.stats.open_high ? `, ${s.stats.open_high} open high/critical` : ""}`}
             </span>
+            <SubmissionFlags confidential={s.confidential} demoHistory={s.demoHistory} />
             <span className="ml-auto">
               <StatusBadge status={s.status} />
             </span>

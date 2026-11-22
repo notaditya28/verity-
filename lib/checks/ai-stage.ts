@@ -1,5 +1,6 @@
 import "server-only";
-import { friendlyAiError, generateJson, geminiConfigured, geminiModel } from "../ai/gemini";
+import { friendlyAiError, geminiConfigured, geminiModel } from "../ai/gemini";
+import { aiCall } from "../ai/gateway";
 import { buildJudgePrompt, JUDGE_RESPONSE_SCHEMA, JUDGE_SYSTEM, PROMPT_VERSION } from "../prompts/judge";
 import { pgTextRetriever, type Retriever } from "./retrieve";
 import type { CheckContext, DraftFinding, DraftUsage } from "./types";
@@ -32,13 +33,20 @@ export async function runAiStage(args: {
   audience: string;
   cta: string;
   text: string; // original text (spans are computed against this)
-  redactedContent: string; // what the model sees
+  redactedContent: string; // content for the prompt; the AI gateway sanitises the whole prompt before sending
   extractedText: string | null;
   ctx: CheckContext;
   deterministic: DraftFinding[];
   retriever?: Retriever;
   timeoutMs?: number;
+  /** For the AI-use log and the sanitiser. */
+  submissionId?: string | null;
+  checkId?: string | null;
+  confidential?: boolean;
+  sensitiveTerms?: string[];
+  withheld?: string[];
 }): Promise<AiStageResult> {
+  if (args.confidential) return { status: "skipped", reason: "Confidential: AI tone and claim checks were kept local. Nothing was sent to any AI provider." };
   if (!geminiConfigured()) return { status: "skipped", reason: "AI checks are off: GEMINI_API_KEY / GEMINI_MODEL not set." };
   const model = geminiModel();
   try {
@@ -57,7 +65,20 @@ export async function runAiStage(args: {
       facts: retrieved.facts,
       alreadyFound: args.deterministic,
     });
-    const { data: raw, model: usedModel } = await generateJson({ system: JUDGE_SYSTEM, prompt, schema: JUDGE_RESPONSE_SCHEMA, timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS });
+    const { data: raw, model: usedModel } = await aiCall({
+      purpose: "judge",
+      orgId: args.orgId,
+      submissionId: args.submissionId,
+      checkId: args.checkId,
+      promptVersion: PROMPT_VERSION,
+      confidential: false,
+      sensitiveTerms: args.sensitiveTerms,
+      withheld: args.withheld,
+      system: JUDGE_SYSTEM,
+      prompt,
+      schema: JUDGE_RESPONSE_SCHEMA,
+      timeoutMs: args.timeoutMs ?? AI_TIMEOUT_MS,
+    });
     const { findings, stats, usages } = validateAiFindings(raw, {
       text: args.text,
       extractedText: args.extractedText,

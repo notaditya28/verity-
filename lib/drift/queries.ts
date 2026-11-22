@@ -17,7 +17,7 @@ export interface AlertView {
   resolutionNote: string | null;
   createdAt: Date;
   resolvedAt: Date | null;
-  submission: { id: string; title: string; status: string; demoHistory: boolean; confidential?: boolean };
+  submission: { id: string; title: string; status: string; demoHistory: boolean; confidential: boolean };
   versionNumber: number;
   versionText: string;
   extractedText: string | null;
@@ -53,7 +53,7 @@ export async function listAlerts(status?: AlertStatus, submissionId?: string): P
       resolutionNote: r.alert.resolutionNote,
       createdAt: r.alert.createdAt,
       resolvedAt: r.alert.resolvedAt,
-      submission: { id: r.submission.id, title: r.submission.title, status: r.submission.status, demoHistory: r.submission.demoHistory },
+      submission: { id: r.submission.id, title: r.submission.title, status: r.submission.status, demoHistory: r.submission.demoHistory, confidential: r.submission.confidential },
       versionNumber: r.version.versionNumber,
       versionText: r.version.text,
       extractedText: r.version.extractedText,

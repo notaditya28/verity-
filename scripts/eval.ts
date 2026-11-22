@@ -188,6 +188,8 @@ async function main() {
     out();
   } else {
     const { runAiStage } = await import("../lib/checks/ai-stage");
+    const { setAiLogSink } = await import("../lib/ai/gateway");
+    setAiLogSink(async () => {}); // the eval's AI calls are not written to the demo org's AI-use log
     const { readImage } = await import("../lib/images/analyze");
     const allRetriever = { retrieve: async () => ({ rules: ctx.rules, facts: ctx.facts, trace: [] }) };
     out(`Main model: \`${process.env.GEMINI_MODEL}\`${process.env.GEMINI_FALLBACK_MODEL ? `, backup: \`${process.env.GEMINI_FALLBACK_MODEL}\` (used only when the main model answers 429/503)` : ""}, temperature 0. All seed rules and facts are given as the retrieved context. The “Model” column shows which one answered.`);
@@ -253,7 +255,7 @@ async function main() {
     // Vision on the sample image
     try {
       const t = performance.now();
-      const v = await readImage({ mimeType: "image/png", buffer: buf });
+      const v = await readImage({ mimeType: "image/png", buffer: buf }, { orgId: "eval", confidential: false });
       const vMs = performance.now() - t;
       const want = Object.keys(truth);
       const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();

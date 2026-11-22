@@ -1,19 +1,20 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
+import { logKeptLocal } from "../ai/gateway";
+import { insideWithheld, sanitizeForAi, withheldRanges } from "../ai/sanitize";
+import { VISION_PROMPT_VERSION } from "../prompts/vision";
 import { runAiStage } from "./ai-stage";
 import { loadPolicy } from "./context";
 import { runDeterministicChecksWithUsages } from "./deterministic";
 import { imageTextCheck, runImageChecks } from "./image-checks";
-import type { DraftUsage } from "./types";
 import { runImageStage } from "./image-stage";
-import { redact } from "./redact";
-import { VISION_PROMPT_VERSION } from "../prompts/vision";
+import type { DraftUsage } from "./types";
 
 /**
- * Runs the full check for one submission version and persists the check row, findings and an audit entry.
- * Order: image reading (once per version) → deterministic text, image-text and image rules (saved first, always)
- * → retrieval + AI judgement (may fail on its own).
+ * Runs the full check for one submission version and persists the check row, findings, fact usages and an audit entry.
+ * Order: check row → image stage (vision once per version, skipped if confidential) → deterministic text, image-text
+ * and image rules (saved first, always) → retrieval + AI judgement through the AI gateway (skipped if confidential).
  * An AI failure never fails the check: it is marked partial and the UI offers a retry.
  */
 export async function runCheck(submissionVersionId: string): Promise<{ checkId: string; findings: number }> {
@@ -28,18 +29,40 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
   const { version, submission } = row;
 
   const { ctx, policyVersion, orgName, palette } = await loadPolicy(submission.orgId);
-  const image = await runImageStage(version);
-  const extractedText = image?.extractedText ?? null;
-  const content = extractedText ? `${version.text}\n\n[Text read from the image]\n${extractedText}` : version.text;
-  const { text: redactedContent, redactions } = redact(content);
+  const confidential = submission.confidential;
+  const sensitiveTerms = (
+    await db
+      .select({ term: schema.sensitiveTerms.term })
+      .from(schema.sensitiveTerms)
+      .where(and(eq(schema.sensitiveTerms.orgId, submission.orgId), eq(schema.sensitiveTerms.active, true)))
+  ).map((t) => t.term);
+  const withheld = withheldRanges(version.text);
+  const withheldText = withheld.map((w) => w.inner);
 
+  // The check row exists first so every AI call (vision, judge) is logged against it.
   const [check] = await db
     .insert(schema.checks)
-    .values({ submissionVersionId, policyVersionId: policyVersion.id, status: "running", aiStatus: "pending", redactions })
+    .values({ submissionVersionId, policyVersionId: policyVersion.id, status: "running", aiStatus: "pending" })
     .returning();
 
   let deterministicCount = 0;
   try {
+    const image = await runImageStage(version, { orgId: submission.orgId, submissionId: submission.id, checkId: check.id, confidential });
+    const extractedText = image?.extractedText ?? null;
+    const content = extractedText ? `${version.text}\n\n[Text read from the image]\n${extractedText}` : version.text;
+    // Counts for the check row and audit (the gateway applies the same sanitiser to the whole prompt it sends).
+    const masked = sanitizeForAi(content, { sensitiveTerms, withheld: withheldText });
+    await db
+      .update(schema.checks)
+      .set({
+        redactions: [
+          ...masked.redactions,
+          ...(masked.withheldSections ? [{ type: "withheld section", count: masked.withheldSections }] : []),
+          ...(masked.sensitiveTermsMasked ? [{ type: "sensitive term", count: masked.sensitiveTermsMasked }] : []),
+        ],
+      })
+      .where(eq(schema.checks.id, check.id));
+
     const body = version.text.trim() ? runDeterministicChecksWithUsages({ text: version.text, channel: submission.channel }, ctx) : { findings: [], usages: [] };
     const imgText = extractedText ? imageTextCheck(extractedText, submission.channel, ctx) : { findings: [], usages: [] };
     const drafts = [...body.findings, ...imgText.findings, ...(image ? runImageChecks(image.facts, ctx, palette) : [])];
@@ -69,13 +92,22 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
       audience: submission.audience,
       cta: submission.cta,
       text: version.text,
-      redactedContent,
+      // Raw content: the AI gateway sanitises the whole prompt in one pass, so ai_calls records the true counts.
+      redactedContent: content,
       extractedText,
       ctx,
-      deterministic: drafts,
-      // Image checks: vision (≤ 20 s) + judge (≤ 18 s) stays inside the 60 s function limit; typical total is ~15 s.
+      // Quotes from inside a withheld section are masked before they can appear in the prompt.
+      deterministic: drafts.map((d) => (insideWithheld(withheld, d.spanStart, d.spanEnd) ? { ...d, quote: "[WITHHELD]" } : d)),
+      // Image checks: vision (≤ 20 s) + judge (≤ 18 s) stays inside the 60 s function limit; typical total is ~6 s.
       timeoutMs: image?.readNow ? 18_000 : undefined,
+      submissionId: submission.id,
+      checkId: check.id,
+      confidential,
+      sensitiveTerms,
+      withheld: withheldText,
     });
+    if (confidential) await logKeptLocal({ orgId: submission.orgId, submissionId: submission.id, checkId: check.id, purpose: "judge" });
+
     // An image that couldn't be read counts as an AI failure: the page offers a retry, which re-reads it.
     const aiStatus = image?.error ? "failed" : ai.status;
     const aiError = [image?.error, ai.status === "failed" ? ai.error : null].filter(Boolean).join(" · ") || null;
@@ -117,8 +149,12 @@ export async function runCheck(submissionVersionId: string): Promise<{ checkId: 
             ? { provider: "gemini", model: ai.model, promptVersion: ai.promptVersion, findings: ai.findings.length, validation: ai.stats, retrieved: ai.retrieved }
             : ai.status === "failed"
               ? { provider: "gemini", model: ai.model, status: "failed", error: ai.error }
-              : { status: "skipped" },
-        redactedBeforeAi: redactions,
+              : { status: "skipped", confidential },
+        // Counts only: confidential or masked content is never written to the audit log.
+        redactedBeforeAi: masked.redactions,
+        withheldSections: masked.withheldSections,
+        sensitiveTermsMasked: masked.sensitiveTermsMasked,
+        confidential,
       },
     });
     return { checkId: check.id, findings: drafts.length + (ai.status === "completed" ? ai.findings.length : 0) };
