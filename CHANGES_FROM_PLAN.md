@@ -41,3 +41,14 @@
 - **Model choice (final):** on 19 Nov `gemini-3.5-flash` was frequently overloaded (503) or rate-limited (429) on the free tier and took 7–20 s per call. `gemini-3.5-flash-lite` caught the same AI eval cases (3/3, clean case clean) at about 1.6 s per call, and read sample 4 correctly, so it is now the default `GEMINI_MODEL`, with `gemini-3.1-flash-lite` as `GEMINI_FALLBACK_MODEL`.
 - **Contrast measurement (k = 3):** the lite model draws looser boxes (e.g. around a whole button), which blended button corners into the text colour and caused a false contrast failure. The crop is now split into three colour groups; the background is the largest and the text is the group with the highest contrast against it. A regression test covers the loose box.
 - **Image text lines:** text read from an image is checked with line breaks treated as spaces, because banner lines are layout, not sentences. Otherwise a price on the line below the product name couldn't be matched to its fact with confidence.
+
+## Round 3 changes
+- **`fact_usages` was needed for Fact Drift.** Joining on `findings.fact_code` would miss exactly the posts that need re-checking: a correct "₹449" creates no finding, and AI "supported" claims were dropped. Every check now records each fact the content relies on (rules, image text, and AI-supported claims with a valid citation), with the exact fact row. Content checked before this is found by a normalised text scan.
+- **The AI judge reports "supported" factual claims** (prompt `judge-v2`) so they can be recorded as usages; they are still not shown as findings.
+- **One AI gateway.** Instead of masking content in each caller, all external AI calls go through `aiCall()`, which masks the whole prompt (so quotes of rule findings and brief fields are covered too), refuses confidential content, and logs every call. This also gives true masking counts in the log.
+- **Rules are versioned** (`rules.current`), like facts, so an accepted clarification creates a new version and checks record which one they used.
+- **Expiry without a cron job:** expired facts open alerts when `/drift` or any page header loads; the unique key makes it idempotent.
+- **Insights "manager sided with"** is taken from the submission's latest manager decision, because decisions are per submission, not per finding.
+- **Trigram similarity in TypeScript** follows pg_trgm (and matches Postgres exactly in the eval), so the grouping is unit-testable offline.
+- **Confidential images** get an offline contrast *estimate* from dominant colour pairs (no text boxes without vision), labelled as estimated and capped at medium severity.
+- **No new dependencies** were added in Round 3; all schema changes were additive (new tables and defaulted columns).

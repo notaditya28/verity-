@@ -1,13 +1,14 @@
 # Disclosures
 
 ## Build window
-All code in this repository was written between Mon 16 Nov 2026 10:00 IST and Thu 19 Nov 2026 10:00 IST. No code from before the window was reused.
+- **Round 2:** code written between Mon 16 Nov 2026 10:00 IST and Thu 19 Nov 2026 10:00 IST. No code from before the window was reused.
+- **Round 3:** the three improvements and fixes were written between Sat 21 Nov 2026 23:59 IST and Tue 24 Nov 2026 23:59 IST, on top of the Round 2 code in this repository. The commit history shows both windows.
 
 ## AI coding assistants
 - **Claude Code** (Anthropic, model Claude Opus 5.5) wrote most of the code under the direction of the participant (team codzilla), who reviewed it.
 
 ## LLM provider used by the product
-- **Google Gemini API** via `@google/genai`. The model name comes from the `GEMINI_MODEL` env var. It is used for tone, messaging and claim judgement and for reading text in images. The API key stays on the server.
+- **Google Gemini API** via `@google/genai`. The model name comes from the `GEMINI_MODEL` env var. It is used for tone, messaging and claim judgement, for reading text in images, and (Round 3) for drafting rule clarifications on `/insights`, which are always marked "AI suggestion — review before accepting". The API key stays on the server. Every call goes through one gateway that masks personal data, withheld sections and sensitive terms, and is listed on `/ai-log` (counts and a SHA-256 only, never the content). Confidential submissions are never sent.
 
 ## Templates / boilerplate
 - No project template or `create-next-app` output was used. Config files were written by hand.
@@ -37,3 +38,5 @@ CIEDE2000 colour difference, WCAG contrast and the k-means colour split used for
 
 ## Demo data
 "Lumina Skin" and all of its products, prices, facts and sample posts are **fictional**. They do not represent any real company.
+
+**Round 3 demo history is fictional too** and labelled "Demo history (fictional)" in the UI: the approved posts used for Fact Drift, the 15 historical submissions behind `/insights` (their rule findings come from the real rule engine; their AI findings, creator disputes and manager decisions are scripted), the confidential "Project Aurora" draft and the sensitive terms ("Project Aurora", "GlowMart"). No AI-call rows are fabricated: the only seeded `ai_calls` row records the confidential draft's local check, where nothing was sent.

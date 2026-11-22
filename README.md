@@ -1,102 +1,114 @@
 # Verity
 
-**Pre-publication brand-compliance gate.** A brand stores its source of truth once: versioned rules, a Fact Registry and its visual identity. Verity checks every draft (text and images) against that source before it goes live. Every issue cites the rule or fact it breaks and comes with a suggested fix. A creator decides on each issue, and a manager approves.
+**Pre-publication brand-compliance gate.** A brand stores its source of truth once: versioned rules, a Fact Registry and its visual identity. Verity checks every draft (text and images) against that source before it goes live. Every issue cites the rule or fact it breaks and comes with a suggested fix. A creator decides on each issue, and a manager approves. After approval, Verity keeps watching: when a fact changes, it finds the published content that is now wrong.
 
 > **No source, no hard flag.** If the AI can't cite a rule or fact that was actually retrieved for this check, or isn't confident, the finding is downgraded to `needs_human_verification` and capped at medium severity.
 
 - **Live demo:** https://verity-eight-lemon.vercel.app (no sign-in needed)
 - **Code:** https://github.com/notaditya28/verity-
-- **Demo brand:** "Lumina Skin", a fictional Indian skincare brand.
-- Built for CodeZen India 2026 Round 2 by team codzilla.
+- **Demo brand:** "Lumina Skin", a fictional Indian skincare brand. Seeded history is fictional and labelled "Demo history (fictional)".
+- Built for CodeZen India 2026 by team codzilla (solo). Round 3 improvements: see [IMPROVEMENTS.md](IMPROVEMENTS.md).
 
-## Try it in 60 seconds
-1. Open the app and go to **Submit**. Click a sample on the right, e.g. **1. Hype influencer post**, then **Check content**.
-2. On the results page each finding shows its rule (e.g. `C-03`), the fact it contradicts (e.g. `F-12: ₹449`), the quoted evidence and a suggested fix. Highlights in the text are coloured by severity.
-3. As the **Creator**, click **Accept all fixes**, then **Apply accepted fixes → v2**. Verity builds v2, re-checks it and shows a word-level diff. v2 comes back clean.
-4. Click **Submit for review**. Switch to **Manager** in the header, open **Review** and **Approve**, **Request changes** or **Escalate to Legal**.
-5. Try **4. Ad image (off-palette)** for images: Verity reads the text in the banner, catches the wrong price (₹399 vs ₹449), measures the yellow-on-orange contrast (about 1.7:1, needs 4.5:1), flags the off-palette orange and the missing alt text.
-6. On **Brand**, a Manager can edit a fact (e.g. change F-12's price). This creates a new policy version, and new checks use the new value. Everything is in the **Audit** log.
+## 3-minute judge walkthrough
+The home page has a **Start here** panel with these three paths; each switches to the right role for you.
 
-**Reset demo** in the header restores the seed data at any time.
+1. **Check a post (Creator, ~1 min).** Submit → sample **1. Hype influencer post** → Check content. Every finding cites a rule (e.g. `C-03`) and a fact (`F-12: ₹449`) with a fix. **Accept all fixes → Apply → v2** comes back clean with a diff → **Submit for review** → switch to **Manager** → Review → **Approve**.
+2. **Fact Drift (Manager, ~1 min).** Brand → **Change F-12 to ₹499** (a real edit). An approved post still says ₹449: the header shows **Drift · 1**. Open **Drift** → **Send back for update**. The creator sees the normal `C-03` finding with the ₹499 fix → Apply → Submit → Approve → the alert shows **Resolved**.
+3. **Guideline insights + AI log (~1 min).** **Insights** ranks the rule creators keep disputing (T-02 on festival greetings, managers approving anyway) with its evidence → **Draft a clarification** (AI) → **Accept** creates a new rule version that the next check uses. Then open **AI log**: every AI call with characters sent and items masked — and the confidential draft "Project Aurora launch teaser", checked with nothing sent.
+
+**Reset demo** in the header restores all seed data (including the drift posts, demo history and confidential example) at any time.
+
+## Pages
+| Page | What it shows |
+|---|---|
+| `/submit` | Draft form, 7 one-click samples, **Confidential** toggle, `[[confidential]] … [[/confidential]]` withheld sections |
+| `/submissions/[id]` | Highlights, cited findings and fixes, accept / edit / dispute, version diff, image read-out, **Fact Drift banner**, **AI disclosure** panel |
+| `/review` | Manager queue |
+| `/brand` | Rules (with version history and "disputed in N of M" hints), Fact Registry (history, edit, **Try Fact Drift**), sensitive terms, palette |
+| `/drift` | Fact Drift alerts grouped by fact: old → new value, matched text in context, send back / dismiss, filters |
+| `/insights` | KPIs, ranked guideline gaps with evidence, AI clarification drafts, repeated mistakes by channel |
+| `/ai-log` | Every third-party AI call: purpose, model, characters, items masked, status, SHA-256 of the payload |
+| `/audit` | Append-only audit log |
 
 ## How a check works
 ```mermaid
 flowchart TD
-    A[Creator submits text / image + goal, audience, CTA] --> B[API route: zod-validated input]
-    B --> I{Image?}
-    I -- yes --> V[Gemini vision, once per version:<br/>text, description, text boxes]
-    V --> P[sharp + node-vibrant:<br/>dominant colours, pixel contrast per text box]
+    A[Creator submits text / image + goal, audience, CTA<br/>optional: Confidential, withheld sections] --> B[API route: zod-validated input]
+    B --> K[(Check row created)]
+    K --> I{Image?}
+    I -- "yes, not confidential" --> V[AI gateway → Gemini vision, once per version]
+    I -- "yes, confidential" --> VL[Local only: palette + estimated contrast]
+    V --> P[sharp + node-vibrant: colours, measured contrast per text box]
     I -- no --> D
-    P --> D[Deterministic rules - no LLM:<br/>terms, tone, superlatives, guarantees,<br/>prices/numbers vs Fact Registry, clinical,<br/>ASCI disclosure and medical claims, delivery,<br/>readability, alt text, WCAG contrast, CIEDE2000 palette]
-    D --> S[(Save rule findings first)]
-    S --> R[PII redaction then retrieval:<br/>Postgres full-text search + pg_trgm over rules and current facts]
-    R --> J[Gemini judge: temperature 0, JSON schema,<br/>untrusted content in its own delimited block]
-    J --> Z[zod validation: exact-quote check,<br/>citation must be in the retrieved set,<br/>confidence below 0.6 → needs human verification]
-    Z --> F[(Findings + check row: policy version,<br/>prompt version, model)]
-    F --> C[Creator: accept / edit / dispute each finding<br/>→ apply fixes → new version, re-check, diff]
-    C --> G{Submit gate: no undecided<br/>high or critical findings}
+    P --> D
+    VL --> D[Deterministic rules - no LLM<br/>+ fact usages recorded, correct or not]
+    D --> S[(Rule findings + fact_usages saved first)]
+    S --> CF{Confidential?}
+    CF -- yes --> LL[(ai_calls: kept local, nothing sent)]
+    CF -- no --> R[Retrieval: Postgres full-text + pg_trgm over current rules and facts]
+    R --> GW[AI gateway: mask personal data, withheld sections, sensitive terms<br/>→ Gemini judge → ai_calls row: counts + SHA-256, never the payload]
+    GW --> Z[zod validation: exact quote, citation in the retrieved set,<br/>confidence < 0.6 → needs human verification; supported claims → fact usages]
+    Z --> F[(Findings + check: policy version, prompt version, model)]
+    F --> C[Creator: accept / edit / dispute → apply → new version, re-check, diff]
+    C --> G{Submit gate}
     G --> M[Manager: approve / request changes / escalate]
     M --> L[(Append-only audit log)]
+    FE[Manager edits a fact / a fact expires] --> DR[Fact Drift: usages of the old fact row<br/>+ text scan → alerts → send back → auto-resolve on re-approval]
+    L --> IN[Insights: disputes, manager outcomes, uncited AI items,<br/>unsupported claims → ranked gaps → clarified rule = new version]
 ```
 
-If Gemini is down or slow, the rule findings are already saved. The check is marked *partial* and the page offers **Retry AI checks**. With no API key, AI checks are skipped and the page says so.
+If Gemini is down or slow, the rule findings are already saved; a backup model is tried once on 429/503, otherwise the check is marked *partial* and the page offers **Retry AI checks**.
 
 ## Architecture
-- **One Next.js app (App Router)** on Vercel. Pages are server components, and the workflow runs through API route handlers. There are no queues, workers or separate backend.
-- **Postgres on Supabase** via Drizzle ORM. The tables are organizations, policy_versions, rules, terms, facts (versioned rows), brand_assets, submissions, submission_versions, checks, findings, decisions and audit_log.
-- **Retrieval** uses Postgres full-text search (`ts_rank`) plus `pg_trgm` `word_similarity` per sentence (`lib/checks/retrieve.ts`). It sits behind a `Retriever` interface, so pgvector can replace it later.
-- **LLM:** Gemini through `@google/genai`, server-side only. The model comes from `GEMINI_MODEL`. There is one judge call per check plus one vision call per image version.
-- **Roles without login:** the **Creator / Manager** switcher sets a cookie, and every workflow API checks it on the server. This is a demo affordance, not authentication.
+- **One Next.js 15 app (App Router)** on Vercel. Server components for pages, route handlers for the workflow. No queues, workers or separate backend.
+- **Postgres on Supabase** via Drizzle ORM. Round 2 tables plus Round 3: `fact_usages`, `drift_alerts`, `ai_calls`, `sensitive_terms`, and versioned `rules` (`current`). All Round 3 schema changes were additive.
+- **One AI gateway** (`lib/ai/gateway.ts`): the only code that calls Gemini. It refuses confidential content, sanitises the whole prompt (`lib/ai/sanitize.ts`) and logs every call to `ai_calls`.
+- **Retrieval**: Postgres full-text (`ts_rank`) + `pg_trgm` behind a `Retriever` interface (pgvector can slot in).
+- **LLM**: `GEMINI_MODEL` (default `gemini-3.5-flash-lite`) with `GEMINI_FALLBACK_MODEL` (`gemini-3.1-flash-lite`), temperature 0, JSON schema.
+- **Roles without login**: a Creator / Manager switcher (cookie), enforced on the server for every action.
 
 | Path | What it does |
 |---|---|
-| `lib/checks/deterministic.ts` | Rule engine (pure, unit-tested offline) |
-| `lib/checks/image-checks.ts`, `lib/images/*` | Alt text, WCAG contrast, CIEDE2000 palette, image-text rules |
-| `lib/checks/ai-stage.ts`, `lib/prompts/*`, `lib/checks/validate-ai.ts` | Retrieval, prompts, validation of AI output |
-| `lib/checks/run.ts` | Orchestrates one check and writes the audit entry |
-| `lib/checks/apply.ts`, `lib/diff.ts` | Applying accepted fixes, word diff |
-| `app/api/*` | Submission, check, decision, review and fact-edit endpoints (zod on every input) |
-| `lib/demo/*` | Fictional seed data and the five samples |
+| `lib/checks/deterministic.ts` | Rule engine; records fact usages (pure, unit-tested) |
+| `lib/checks/run.ts` | Orchestrates one check: image stage, rules, usages, AI stage, audit |
+| `lib/drift/*` | Value matching (pure), drift detection / expiry / resolution, queries |
+| `lib/insights/*` | Gap ranking and pg_trgm-compatible similarity (pure), SQL loaders |
+| `lib/ai/*` | Gateway, sanitiser, Gemini client, AI-log queries |
+| `lib/facts.ts`, `lib/rules.ts` | Versioned fact and rule edits (new policy version each time) |
+| `lib/images/*`, `lib/checks/image-checks.ts` | Pixel analysis, CIEDE2000, WCAG contrast, alt text |
+| `app/api/*` | All endpoints (zod on every input, role checked on the server) |
+| `lib/demo/*` | Fictional seed data, demo history and samples |
 
 ## Run it locally
-You need Node 20+ (tested on Node 24), a Supabase project and a Gemini API key.
+You need Node 20+, a Supabase project and a Gemini API key.
 ```bash
-cp .env.example .env.local   # fill in DATABASE_URL, DIRECT_DATABASE_URL, GEMINI_API_KEY, GEMINI_MODEL
+cp .env.example .env.local   # DATABASE_URL, DIRECT_DATABASE_URL, GEMINI_API_KEY, GEMINI_MODEL, GEMINI_FALLBACK_MODEL
 npm install
-npm run db:push              # create the tables
+npm run db:push              # create / update the tables (additive)
 npm run seed                 # load the Lumina Skin demo org
 npm run dev                  # http://localhost:3000
 ```
 
 | Script | Purpose |
 |---|---|
-| `npm run build` / `npm run lint` / `npm run typecheck` | Quality gates (all pass before every push) |
-| `npm test` | Offline unit checks: AI-output validation, fix application and diff, image pipeline |
-| `npm run eval` | Writes [EVAL.md](EVAL.md): rule-engine precision/recall on a labelled set, fix effectiveness, image measurements. `npm run eval -- --ai` adds Gemini judge and vision results |
-| `npx tsx scripts/try-samples.ts` | Prints the rule findings for each sample, before and after fixes |
-| `npx tsx scripts/make-sample-image.ts` | Regenerates the sample ad image |
+| `npm run typecheck` / `lint` / `build` | Quality gates (all pass before every push) |
+| `npm test` | Offline tests: AI-output validation, fixes and diff, images, drift matching, insights ranking, confidential mode (AI client intercepted) |
+| `npm run eval -- --ai --drift --insights` | Writes [EVAL.md](EVAL.md): rules, images, Gemini, drift scenarios, confidential checks, insights ranking |
 
 ## Environment variables
-| Name | Where it's used |
+| Name | Use |
 |---|---|
-| `DATABASE_URL` | Supabase **transaction pooler** URL (port 6543). Used by the app at runtime |
-| `DIRECT_DATABASE_URL` | Supabase **session pooler** URL (port 5432). Used by `db:push` and `seed` (optional, falls back to `DATABASE_URL`) |
-| `GEMINI_API_KEY` | Google AI Studio key. Server-side only |
-| `GEMINI_FALLBACK_MODEL` | Optional, e.g. `gemini-3.1-flash-lite`. Used once when the main model answers "busy" (429/503) |
-| `GEMINI_MODEL` | e.g. `gemini-3.5-flash-lite` (`gemini-2.5-flash` is no longer available to new API keys) |
+| `DATABASE_URL` | Supabase transaction pooler (port 6543), used at runtime |
+| `DIRECT_DATABASE_URL` | Supabase session pooler (port 5432), used by `db:push` and `seed` |
+| `GEMINI_API_KEY` | Google AI Studio key, server-side only |
+| `GEMINI_MODEL` | e.g. `gemini-3.5-flash-lite` |
+| `GEMINI_FALLBACK_MODEL` | Optional, e.g. `gemini-3.1-flash-lite`; used once when the main model answers 429/503 |
 
 ## Quality and safety
-- TypeScript strict. zod validates every API input and every LLM output.
-- Content is treated as untrusted. It goes into its own delimited block, tag-like text is neutralised, and the model is told never to follow instructions in it.
-- Emails, phone numbers and Aadhaar- or PAN-like IDs are redacted before any AI call. The counts are stored on the check and in the audit log.
-- Every check stores its policy version, prompt version and model, so any result can be traced.
-- Pages have loading, empty and error states. They use semantic HTML with labels, focus rings and colour plus text for severity, and work at phone width.
-
-## Limitations
-- The roles switcher is not authentication, and there is one demo org.
-- Images are stored inline as data URLs (up to 1.5 MB) rather than in object storage.
-- The app can't edit pixels. Image findings carry advice ("In the image, change ₹399 to ₹449"); only alt text is fixed automatically.
-- The rule engine is pattern-based. Paraphrases outside its patterns depend on the AI judge. See [EVAL.md](EVAL.md) for measured results, including misses.
+- TypeScript strict; zod on every API input and every LLM output.
+- Every external AI call goes through one gateway: personal data, `[[confidential]]` sections and sensitive terms are masked first; confidential submissions never reach it. The log stores counts and a SHA-256, never content.
+- Content is untrusted in prompts (delimited, tag-like text neutralised, strict JSON schema).
+- Every check stores its policy, prompt and model version; every action is audit-logged.
 
 ## More documents
-[FEATURES.md](FEATURES.md) · [EVAL.md](EVAL.md) · [CHANGES_FROM_PLAN.md](CHANGES_FROM_PLAN.md) · [DISCLOSURES.md](DISCLOSURES.md) · [ROUND3.md](ROUND3.md)
+[IMPROVEMENTS.md](IMPROVEMENTS.md) · [TESTING.md](TESTING.md) · [EVAL.md](EVAL.md) · [FEATURES.md](FEATURES.md) · [CHANGES_FROM_PLAN.md](CHANGES_FROM_PLAN.md) · [DISCLOSURES.md](DISCLOSURES.md) · [CONTRIBUTIONS.md](CONTRIBUTIONS.md)

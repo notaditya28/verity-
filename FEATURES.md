@@ -82,7 +82,31 @@
 - "Reset demo" works after checks have run (it deletes submissions before rebuilding the brand data)
 - Re-checking is only possible while a submission is with the creator, so approved results can't change
 
+## Round 3 (final round) — see IMPROVEMENTS.md for details and results
+### Fact Drift Alerts
+- Every check records **fact usages** (correct or not) from rules, image text and AI-supported claims, with the exact fact row
+- Fact edit → alerts for approved / in-review / escalated content still using the old value (usage + normalised text scan), in the same request; expired facts open alerts on page load
+- `/drift` (grouped by fact, filters), header badge "Drift · N", banner on submissions, "N affected → View drift" and history on `/brand`, **Try it: change F-12 to ₹499**
+- Manager: **Send back for update** (changes requested + re-check under the current policy) or **Dismiss** with a reason; alerts **auto-resolve** on re-approval
+- Seeded approved posts (F-12, F-31, F-30, and F-32 which expires 23 Nov)
+
+### Guideline-gap insights
+- `/insights`: KPIs, ranked gaps (disputed rules with manager outcomes, uncovered topics, candidate facts by pg_trgm similarity > 0.5), evidence with links, repeated mistakes by channel
+- Manager: **Draft a clarification** (AI, via the gateway, anonymised and masked) → **Accept → new rule version** (versioned rules, next check uses it) / new AI-judged rule / **Add as fact** (value and source entered by the owner)
+- Rule history and "Disputed in N of M" hints on `/brand`; 15 seeded fictional history submissions
+
+### Confidential mode + AI-use log
+- One **AI gateway** for every external AI call: refuses confidential content, masks personal data, `[[confidential]]` sections and sensitive terms in the whole prompt, writes an `ai_calls` row (counts, SHA-256, never the payload)
+- **Confidential** toggle (one-way; manager can set it later): local checks only, offline contrast estimate, "kept local" log row, lock badges
+- **Sensitive terms** list on `/brand` (audited without storing the term)
+- `/ai-log` with filters and totals; **AI disclosure** panel on each submission
+
+### Round 2 fixes
+- C-02 catches fixed-time results in words ("in a week"); rule engine eval 25/25
+- **Upload corrected image → vN** in the creator toolbar
+- **Start here** guided paths on the home page (role switched automatically)
+
 ## Not built (by design)
 - Logo detection (last item on the cut list)
 - Real authentication and multi-org support (the brief asks for a pre-seeded demo org and a role switcher)
-- Replacing the image inside an existing submission (image findings are advice; see CHANGES_FROM_PLAN)
+- ~~Replacing the image inside an existing submission~~ — built in Round 3
