@@ -1,7 +1,6 @@
-// Pixel analysis with sharp + node-vibrant. No network and no server-only import, so scripts can test it offline.
+// Pixel analysis with sharp. No network and no server-only import, so scripts can test it offline.
 import sharp from "sharp";
-import { Vibrant } from "node-vibrant/node";
-import { hexToRgb, rgbToHex, textColours, type Rgb } from "./color";
+import { deltaE2000, hexToRgb, rgbToHex, textColours, type Rgb } from "./color";
 
 /** A text block as reported by the image reader: box is [ymin, xmin, ymax, xmax] normalised to 0–1000. */
 export interface TextBlockInput {
@@ -16,16 +15,44 @@ export interface DominantColour {
   share: number;
 }
 
-/** Dominant colours via node-vibrant on a downscaled copy. Share = swatch population / total population. */
-export async function dominantColours(buffer: Buffer): Promise<DominantColour[]> {
-  const small = await sharp(buffer).resize(256, 256, { fit: "inside" }).removeAlpha().png().toBuffer();
-  const palette = await Vibrant.from(small).getPalette();
-  const swatches = Object.values(palette).filter((s): s is NonNullable<typeof s> => !!s && s.population > 0);
-  const total = swatches.reduce((n, s) => n + s.population, 0);
+/**
+ * Dominant colours by true pixel share: downscale, bucket every pixel (4 bits per channel), then merge buckets
+ * that look the same (CIEDE2000 < 8) into clusters, weighted by pixel count. A colour's share is the real
+ * fraction of the image it covers, so a white or ivory background counts, and anti-aliased edge blends stay small.
+ */
+export async function dominantColours(buffer: Buffer, max = 6): Promise<DominantColour[]> {
+  const { data, info } = await sharp(buffer).resize(160, 160, { fit: "inside" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const buckets = new Map<number, { n: number; r: number; g: number; b: number }>();
+  let total = 0;
+  for (let i = 0; i + 2 < data.length; i += info.channels) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const e = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
+    e.n++;
+    e.r += r;
+    e.g += g;
+    e.b += b;
+    buckets.set(key, e);
+    total++;
+  }
   if (!total) return [];
-  return swatches
-    .map((s) => ({ hex: s.hex.toUpperCase(), share: s.population / total }))
-    .sort((a, b) => b.share - a.share);
+  const clusters: { n: number; r: number; g: number; b: number; rep: Rgb }[] = [];
+  for (const e of [...buckets.values()].sort((a, b) => b.n - a.n)) {
+    const rgb: Rgb = [e.r / e.n, e.g / e.n, e.b / e.n];
+    const c = clusters.find((x) => deltaE2000(x.rep, rgb) < 8);
+    if (c) {
+      c.n += e.n;
+      c.r += e.r;
+      c.g += e.g;
+      c.b += e.b;
+    } else clusters.push({ ...e, rep: rgb });
+  }
+  return clusters
+    .sort((a, b) => b.n - a.n)
+    .slice(0, max)
+    .map((c) => ({ hex: rgbToHex([c.r / c.n, c.g / c.n, c.b / c.n]), share: c.n / total }));
 }
 
 export interface MeasuredBlock {
@@ -53,9 +80,12 @@ export async function measureTextBlocks(buffer: Buffer, blocks: TextBlockInput[]
       const height = Math.min(H - top, Math.ceil(((ymax - ymin) / 1000) * H));
       if (width >= 4 && height >= 4) {
         try {
+          // Downscale by area (≈40k pixels max), not into a square: a wide, short text line squeezed into 96×96
+          // would blur its strokes into the background and understate the contrast.
+          const scale = Math.min(1, Math.sqrt(40_000 / (width * height)));
           const { data, info } = await sharp(buffer)
             .extract({ left, top, width, height })
-            .resize(96, 96, { fit: "inside" })
+            .resize(Math.max(4, Math.round(width * scale)), Math.max(4, Math.round(height * scale)), { fit: "fill", kernel: "nearest" })
             .removeAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });

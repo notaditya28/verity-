@@ -64,6 +64,9 @@ export function checkAltText(r: EngineRule, img: ImageFacts): DraftFinding[] {
   return [];
 }
 
+/** How far below the minimum a measured contrast can be and still count as borderline (see test-images.ts). */
+export const CONTRAST_TOLERANCE = 0.1;
+
 export function checkContrast(r: EngineRule, img: ImageFacts, palette: { name: string; hex: string }[]): DraftFinding[] {
   const min = num(r, "minRatio", 4.5);
   const out: DraftFinding[] = [];
@@ -72,6 +75,9 @@ export function checkContrast(r: EngineRule, img: ImageFacts, palette: { name: s
     const bg = hexToRgb(b.backgroundHex);
     const ratio = contrastRatio(fg, bg);
     if (ratio >= min) continue;
+    // Measurement of thin, anti-aliased text can read up to ~0.05 low, so a ratio just under the minimum is
+    // reported as borderline (needs a human look) rather than as a hard failure.
+    const borderline = b.method === "measured" && ratio >= min - CONTRAST_TOLERANCE;
     // Suggest the palette colour with the best contrast on this background.
     const best = palette
       .map((p) => ({ ...p, ratio: contrastRatio(hexToRgb(p.hex), bg) }))
@@ -79,15 +85,16 @@ export function checkContrast(r: EngineRule, img: ImageFacts, palette: { name: s
     out.push(
       finding(r, {
         quote: b.text,
+        ...(borderline ? { severity: "medium" as const, label: "needs_human_verification" as const } : {}),
         explanation: `Text in the image has a contrast ratio of ${ratio.toFixed(2)}:1 (${b.textHex} on ${b.backgroundHex}, ${
           b.method === "measured" ? "measured from the pixels" : "estimated by the image reader"
-        }). It needs at least ${min}:1.`,
+        }). It needs at least ${min}:1.${borderline ? ` This is within the ${CONTRAST_TOLERANCE} measurement tolerance, so check it by eye.` : ""}`,
         suggestedFix: best
           ? best.ratio >= min
             ? `In the image, set “${b.text}” in ${best.name} (${best.hex}), which gives ${best.ratio.toFixed(2)}:1 on this background.`
             : `In the image, change the background behind “${b.text}” to a palette colour. No palette colour reaches ${min}:1 on ${b.backgroundHex}.`
           : `Raise the contrast of “${b.text}” to at least ${min}:1.`,
-        confidence: b.method === "measured" ? 0.95 : 0.7,
+        confidence: borderline ? 0.6 : b.method === "measured" ? 0.95 : 0.7,
       }),
     );
     if (out.length >= 3) break;

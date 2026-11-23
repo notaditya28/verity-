@@ -17,7 +17,7 @@ export interface ImageStageResult {
 }
 
 /**
- * Prepares an image for checking: dominant colours (sharp + node-vibrant), and, once per version, Gemini vision
+ * Prepares an image for checking: dominant colours by pixel share (sharp), and, once per version, Gemini vision
  * OCR + description + text-block colours measured from the pixels. Results are saved on the version so a
  * re-check reuses them. Never throws.
  */

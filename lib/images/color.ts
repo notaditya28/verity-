@@ -149,9 +149,9 @@ export function textColours(pixels: Rgb[], iterations = 10): { background: Rgb; 
   if (!candidates.length) return null;
   const text = candidates.sort((x, y) => contrastRatio(y.col, bg) - contrastRatio(x.col, bg))[0];
   // Anti-aliased glyph edges pull the text centroid towards the background, so use the half of the text pixels
-  // furthest from the background (the solid glyph cores). This avoids understating the contrast.
+  // furthest from the background (the purest quarter: solid glyph cores). This avoids understating the contrast.
   const fgPixels = pixels.filter((_, i) => assign[i] === text.k).sort((p, q) => d2(q, bg) - d2(p, bg));
-  const core = fgPixels.slice(0, Math.max(1, Math.ceil(fgPixels.length / 2)));
+  const core = fgPixels.slice(0, Math.max(1, Math.ceil(fgPixels.length / 4)));
   const fg = core.reduce<Rgb>((s, p) => [s[0] + p[0] / core.length, s[1] + p[1] / core.length, s[2] + p[2] / core.length], [0, 0, 0]);
   return { background: bg, foreground: fg, foregroundShare: text.share };
 }

@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { contrastRatio, deltaE2000, hexToRgb } from "../lib/images/color";
 import { dominantColours, measureTextBlocks } from "../lib/images/pixels";
-import { checkAltText, imageTextFindings, runImageChecks } from "../lib/checks/image-checks";
+import sharp from "sharp";
+import { checkAltText, CONTRAST_TOLERANCE, imageTextFindings, runImageChecks } from "../lib/checks/image-checks";
 import { SEED_FACTS, SEED_PALETTE, SEED_RULES, SEED_TERMS } from "../lib/demo/seed-data";
 
 const ctx = {
@@ -69,6 +70,45 @@ async function main() {
   const a01 = ctx.rules.find((r) => r.code === "A-01")!;
   assert.equal(checkAltText(a01, { altText: "Orange banner announcing the festive sale of Lumina Vitamin C Serum", description: null, colours: [], blocks: [] }).length, 0);
   assert.equal(checkAltText(a01, { altText: "banner.png", description: null, colours: [], blocks: [] }).length, 1);
+
+  // Regression (Round 3): a compliant banner in brand colours on a light background. node-vibrant ignored the
+  // ivory background (it filters near-white) and flagged anti-aliased blends as off-palette; text crops squeezed
+  // into 96×96 under-measured contrast. Both must now pass cleanly.
+  const compliantSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#F7F3EA"/>
+<text x="400" y="230" text-anchor="middle" font-family="Arial" font-size="84" font-weight="700" fill="#2B2B2B">Festive Glow Sale</text>
+<text x="400" y="370" text-anchor="middle" font-family="Arial" font-size="52" font-weight="700" fill="#0E7C7B">Lumina Vitamin C Serum</text>
+<rect x="270" y="560" width="260" height="84" rx="42" fill="#0E7C7B"/><text x="400" y="616" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700" fill="#FFFFFF">Shop now</text></svg>`;
+  const compliant = await sharp(Buffer.from(compliantSvg)).png().toBuffer();
+  const cc = await dominantColours(compliant);
+  assert.equal(cc[0].hex, "#F7F3EA", "the ivory background is the dominant colour");
+  assert.ok(cc[0].share > 0.8, `background share should be > 80%, got ${cc[0].share}`);
+  const cb = await measureTextBlocks(compliant, [
+    { text: "Festive Glow Sale", box: [200, 50, 300, 950], text_color: "#000000", background_color: "#FFFFFF" },
+    { text: "Lumina Vitamin C Serum", box: [400, 100, 480, 900], text_color: "#000000", background_color: "#FFFFFF" },
+    { text: "Shop now", box: [696, 335, 807, 665], text_color: "#000000", background_color: "#FFFFFF" },
+  ]);
+  const clean = runImageChecks({ altText: "Ivory festive sale banner for the Lumina Vitamin C Serum", description: null, colours: cc, blocks: cb }, ctx, SEED_PALETTE);
+  assert.equal(clean.length, 0, `compliant banner should have no findings, got ${clean.map((f) => f.ruleCode).join(",")}`);
+
+  // Measured contrast stays within the stated tolerance of the true value for large and small text.
+  for (const [fg, bg2] of [["#0E7C7B", "#F7F3EA"], ["#767676", "#FFFFFF"], ["#FFD23F", "#F28C28"], ["#2B2B2B", "#F7F3EA"]]) {
+    const s = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="${bg2}"/>
+<text x="400" y="370" text-anchor="middle" font-family="Arial" font-size="52" font-weight="700" fill="${fg}">Lumina Vitamin C Serum</text>
+<text x="400" y="470" text-anchor="middle" font-family="Arial" font-size="22" fill="${fg}">small regular text for a thin-stroke test</text></svg>`;
+    const b2 = await sharp(Buffer.from(s)).png().toBuffer();
+    const [big, small] = await measureTextBlocks(b2, [
+      { text: "big", box: [400, 100, 480, 900], text_color: "#000000", background_color: "#FFFFFF" },
+      { text: "small", box: [565, 150, 600, 850], text_color: "#000000", background_color: "#FFFFFF" },
+    ]);
+    const truth = contrastRatio(hexToRgb(fg), hexToRgb(bg2));
+    for (const m of [big, small]) {
+      const got = contrastRatio(hexToRgb(m.textHex), hexToRgb(m.backgroundHex));
+      // Near the 4.5 threshold the absolute error must be within the tolerance; far from it, within 2%. Same verdict.
+      assert.ok(Math.abs(got - truth) <= Math.max(CONTRAST_TOLERANCE, 0.02 * truth), `${fg} on ${bg2} (${m.text}): measured ${got.toFixed(2)}, true ${truth.toFixed(2)}`);
+      if (Math.abs(truth - 4.5) > CONTRAST_TOLERANCE) assert.equal(got >= 4.5, truth >= 4.5, `${fg} on ${bg2} (${m.text}): verdict differs`);
+    }
+  }
+  console.log("  compliant banner: no findings; measured contrast within ±" + CONTRAST_TOLERANCE + " (or 2%) of the true value, same verdict, for large and small text");
 
   console.log("images: all assertions passed");
 }

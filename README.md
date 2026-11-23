@@ -38,7 +38,7 @@ flowchart TD
     K --> I{Image?}
     I -- "yes, not confidential" --> V[AI gateway → Gemini vision, once per version]
     I -- "yes, confidential" --> VL[Local only: palette + estimated contrast]
-    V --> P[sharp + node-vibrant: colours, measured contrast per text box]
+    V --> P[sharp: colours by pixel share, measured contrast per text box]
     I -- no --> D
     P --> D
     VL --> D[Deterministic rules - no LLM<br/>+ fact usages recorded, correct or not]

@@ -7,7 +7,7 @@ Gates run before every push: `npm run typecheck && npm run lint && npm test && n
 |---|---|
 | `scripts/test-validate-ai.ts` | AI-output validation: zod shape, exact-quote check, citation must be in the retrieved set, confidence < 0.6 downgrade, duplicates, "supported" items dropped |
 | `scripts/test-workflow.ts` | Word diff; applying accepted fixes (replace / insert / delete, overlaps resolved in order) |
-| `scripts/test-images.ts` | WCAG contrast and CIEDE2000 reference values; palette, measured contrast and alt text on the real sample image; a loose button box still measures as a pass; image-text price contradiction |
+| `scripts/test-images.ts` | WCAG contrast and CIEDE2000 reference values; palette, measured contrast and alt text on the real sample image; a loose button box still measures as a pass; image-text price contradiction; a compliant on-brand banner gets no findings; contrast accuracy across colour pairs and text sizes |
 | `scripts/test-drift.ts` | **Fact Drift**: old-value normalisation (₹ / Rs / Rs. / INR / `/-` / rupees, separators, %, SPF, day ranges), false-match guards, keyword gating, usages recorded for correct and wrong content and image text, seeded posts clean and recording their fact |
 | `scripts/test-insights.ts` | **Insights**: pg_trgm example value, normalisation, grouping; on the seeded history T-02 ranks first with 5 disputes (4 sided with creator), one vegan / cruelty-free topic of 3, one dark-spots fact group of 3; pass rate by channel |
 | `scripts/test-confidential.ts` | **Confidential + AI log** (AI client and log intercepted): 0 AI calls for confidential content (gateway refuses judge and vision); planted email, phones, Aadhaar, withheld section and sensitive terms absent from the payload; the `ai_calls` row's counts, character count and SHA-256, with no content; whole-word terms; offsets map to the original; errors logged |
@@ -43,6 +43,7 @@ Scripted HTTP runs against a local production build (`next start`) and against t
 6. **Reset demo could exceed the default function time limit** with the larger seed → 60 s limit on the reset route (≈1 s on Vercel).
 7. A demo sample put a wholesale price inside a withheld section, which the rule engine read as the retail price → sample rewritten.
 8. **"Treats acne in a week" missed C-02** (Round 2 eval miss) → fixed-time pattern accepts number words and weeks / months.
+9. **A corrected, on-brand image still got palette and contrast findings** (found while testing "Upload corrected image") → dominant colours are now measured by true pixel share (node-vibrant ignored light backgrounds), and text crops are downscaled by area with nearest-neighbour sampling. Regression tests: a compliant ivory banner gets no findings; measured contrast within ±0.1 (or 2%) of the true value with the same verdict.
 
 ## Known issues
 - Clarifying a rule's wording doesn't change a pattern rule's parameters (T-02 still flags "!!" after clarification).

@@ -82,6 +82,6 @@ All three were named at Round 2 and are built, deployed and tested. Every number
 
 ## Also in Round 3 (Round 2 fixes)
 - **Eval miss fixed:** "Treats acne in a week." now also triggers C-02 (fixed-time results in words: *a / two / a few … days / weeks / months*), without flagging delivery times. Rule engine: 25/25 cases, precision and recall 100%.
-- **Replace the image** in a submission: "Upload corrected image → vN" creates the next version and re-checks it.
+- **Replace the image** in a submission: "Upload corrected image → vN" creates the next version and re-checks it. Testing it found false palette / contrast findings on a corrected on-brand banner; colours are now measured by true pixel share and contrast crops more accurately (see TESTING.md, bug 9).
 - **Start here** on the home page: three guided paths that switch to the right role.
 - **Model**: `gemini-3.5-flash-lite` with a backup model; new pages render in under 2 s on Vercel (indexed queries).
