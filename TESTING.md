@@ -50,3 +50,4 @@ Scripted HTTP runs against a local production build (`next start`) and against t
 - Free-tier Gemini can return 429/503 under load; a backup model is tried, otherwise "Retry AI checks".
 - Expiry drift is computed on page load, not by a background job.
 - The demo is shared: everyone sees the same data, and **Reset demo** clears it for everyone.
+- Video (reels, shorts, video ads) is not supported yet: only the caption (as text) and a cover image can be checked. Planned next: timestamped speech and on-screen text via Gemini video understanding, with the existing checks run on it.
