@@ -4,7 +4,7 @@
 
 > **No source, no hard flag.** If the AI can't cite a rule or fact that was actually retrieved for this check, or isn't confident, the finding is downgraded to `needs_human_verification` and capped at medium severity.
 
-- **Live demo:** https://verity-eight-lemon.vercel.app (no sign-in needed)
+- **Live demo:** https://getverity.xyz (no sign-in needed; same deployment also at https://verity-eight-lemon.vercel.app)
 - **Code:** https://github.com/notaditya28/verity-
 - **Demo brand:** "Lumina Skin", a fictional Indian skincare brand. Seeded history is fictional and labelled "Demo history (fictional)".
 - Built for CodeZen India 2026 by team codzilla (solo). Round 3 improvements: see [IMPROVEMENTS.md](IMPROVEMENTS.md).

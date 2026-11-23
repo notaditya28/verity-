@@ -1,6 +1,6 @@
 # Round 3 — the three improvements
 
-Live: https://verity-eight-lemon.vercel.app · Code: https://github.com/notaditya28/verity- · Measured results: [EVAL.md](EVAL.md) · Tests: [TESTING.md](TESTING.md)
+Live: https://getverity.xyz (also https://verity-eight-lemon.vercel.app) · Code: https://github.com/notaditya28/verity- · Measured results: [EVAL.md](EVAL.md) · Tests: [TESTING.md](TESTING.md)
 
 All three were named at Round 2 and are built, deployed and tested. Every number on every page is computed from database rows. The seeded history is fictional and labelled "Demo history (fictional)"; **Reset demo** restores it.
 
